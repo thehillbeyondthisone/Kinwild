@@ -13,6 +13,8 @@ export interface Critter {
   shell: import('../core/characterMesh').BlendShellCharacter;
   /** ground-projected position the critter is at (for pathing) */
   position(): THREE.Vector3;
+  /** current yaw in radians (0 = +z) */
+  heading(): number;
   follow(target: THREE.Vector3): void;
   update(dt: number, time: number): void;
   /** Subscribe to footfalls/landings (walkers and hoppers). */
@@ -46,7 +48,9 @@ function ropeDefs(dna: CritterDNA): WalkerRopeDef[] {
   return (dna.ropes ?? []).map((r) => {
     const sx = Math.sign(r.at[0]) || 0;
     const presets = {
-      ear: { dir: new THREE.Vector3(sx * 0.25, 1, -0.15), erect: 13 },
+      ear: r.floppy
+        ? { dir: new THREE.Vector3(sx * 1.0, -0.35, 0.1), erect: 4.5 }
+        : { dir: new THREE.Vector3(sx * 0.25, 1, -0.15), erect: 13 },
       antenna: { dir: new THREE.Vector3(sx * 0.15, 1, 0.2), erect: 16 },
       tail: { dir: new THREE.Vector3(0, -0.35, -1), erect: 0 },
     } as const;
@@ -66,16 +70,31 @@ function ropeDefs(dna: CritterDNA): WalkerRopeDef[] {
 
 function headFor(dna: CritterDNA) {
   if (!dna.head) return undefined;
+  const h = dna.head;
   return {
     spec: {
       type: 'sphere' as const,
-      r: dna.head.size,
-      color: paletteColor(dna, dna.head.color, 1),
-      blend: dna.head.size * 0.45,
+      r: h.size,
+      color: paletteColor(dna, h.color, 1),
+      blend: h.size * 0.45,
     },
-    offset: v3(dna.head.at),
-    eyes: dna.head.eyes
-      ? { r: dna.head.eyes, spread: dna.head.size * 0.38, y: dna.head.size * 0.12 }
+    offset: v3(h.at),
+    eyes: h.eyes
+      ? { r: h.eyes, spread: h.size * 0.38, y: h.size * 0.12, forward: h.size * 0.8 }
+      : undefined,
+    // On walkers `beak` reads as a soft muzzle: generous blend, rounder tip.
+    snout: h.beak
+      ? {
+          spec: {
+            type: 'cone' as const,
+            r: h.beak[0],
+            r2: h.beak[0] * 0.75,
+            hl: h.beak[1] / 2,
+            color: paletteColor(dna, h.beakColor ?? h.color, 1),
+            blend: h.beak[0] * 0.6,
+          },
+          offset: new THREE.Vector3(0, -h.size * 0.18, h.size * 0.72),
+        }
       : undefined,
   };
 }
@@ -141,7 +160,7 @@ function buildHopper(dna: CritterDNA): Hopper {
       : { type: 'sphere', r: r0 * 0.6, color: paletteColor(dna, 1), blend: r0 * 0.28 },
     headOffset: v3(dna.head?.at, [0, r0 * 0.95, r0 * 0.6]),
     eyes: dna.head?.eyes
-      ? { r: dna.head.eyes, spread: dna.head.size * 0.38, y: dna.head.size * 0.12 }
+      ? { r: dna.head.eyes, spread: dna.head.size * 0.38, y: dna.head.size * 0.12, forward: dna.head.size * 0.8 }
       : undefined,
     ropes: ropeDefs(dna),
     feet: [-1, 1].map((side) => ({
@@ -178,7 +197,7 @@ function buildFlyer(dna: CritterDNA): Flyer {
       : undefined,
     beakOffset: dna.head?.beak ? new THREE.Vector3(0, -dna.head.size * 0.08, dna.head.size * 0.85) : undefined,
     eyes: dna.head?.eyes
-      ? { r: dna.head.eyes, spread: dna.head.size * 0.4, y: dna.head.size * 0.18 }
+      ? { r: dna.head.eyes, spread: dna.head.size * 0.4, y: dna.head.size * 0.18, forward: dna.head.size * 0.72 }
       : undefined,
     wing: {
       r: dna.wings!.thickness,
@@ -221,8 +240,8 @@ function buildWiggler(dna: CritterDNA): Wiggler {
     segments: segs,
     segLen: segs[0].r * 1.05,
     eyes: dna.head?.eyes
-      ? { r: dna.head.eyes, spread: segs[0].r * 0.42, y: segs[0].r * 0.3 }
-      : { r: segs[0].r * 0.22, spread: segs[0].r * 0.42, y: segs[0].r * 0.3 },
+      ? { r: dna.head.eyes, spread: segs[0].r * 0.42, y: segs[0].r * 0.3, forward: segs[0].r * 0.72 }
+      : { r: segs[0].r * 0.22, spread: segs[0].r * 0.42, y: segs[0].r * 0.3, forward: segs[0].r * 0.72 },
   };
   const w = new Wiggler(def);
   w.speed = dna.speed ?? 0.9;
@@ -247,6 +266,7 @@ export function createCritter(raw: CritterDNA): Critter {
     shell: impl.character,
     position: () =>
       anyImpl.pos ?? anyImpl.body?.pos ?? (impl as Wiggler).character.prims[0].position,
+    heading: () => impl.heading,
     follow: (t) => impl.follow(t),
     update: (dt, time) => impl.update(dt, time),
     setLandHandler: (cb) => {

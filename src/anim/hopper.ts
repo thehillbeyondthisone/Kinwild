@@ -4,13 +4,13 @@ import { PrimitiveSpec } from '../core/primitives';
 import { edgesToLists } from '../core/blendGraph';
 import { dampAngle, placeSegment, yawQuat } from './ik';
 import { Rope } from './rope';
-import { CritterEyes } from './eyes';
+import { CritterEyes, EyesConfig } from './eyes';
 
 export interface HopperDef {
   body: PrimitiveSpec;
   head: PrimitiveSpec;
   headOffset: THREE.Vector3;
-  eyes?: { r: number; spread: number; y: number };
+  eyes?: EyesConfig;
   /** Rope appendages anchored in body space. */
   ropes: {
     anchor: THREE.Vector3;

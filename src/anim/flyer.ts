@@ -4,7 +4,7 @@ import { PrimitiveSpec } from '../core/primitives';
 import { edgesToLists } from '../core/blendGraph';
 import { dampAngle, placeSegment, yawQuat } from './ik';
 import { Rope } from './rope';
-import { CritterEyes } from './eyes';
+import { CritterEyes, EyesConfig } from './eyes';
 
 export interface FlyerDef {
   body: PrimitiveSpec;
@@ -12,7 +12,7 @@ export interface FlyerDef {
   headOffset: THREE.Vector3;
   beak?: PrimitiveSpec;
   beakOffset?: THREE.Vector3;
-  eyes?: { r: number; spread: number; y: number };
+  eyes?: EyesConfig;
   wing: { r: number; len: number; color: THREE.ColorRepresentation; thin: number };
   wingAnchor: THREE.Vector3;
   /** Dangly feet. */

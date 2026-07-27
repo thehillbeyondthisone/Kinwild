@@ -76,6 +76,10 @@ export function generateDNA(seed: number): CritterDNA {
       color: 1,
       eyes: r0 * range(0.16, 0.24),
     };
+    if (flat && r() < 0.55) {
+      dna.head.beak = [r0 * range(0.3, 0.42), r0 * range(0.4, 0.6)];
+      dna.head.beakColor = 3;
+    }
     if (count === 2 && r() < 0.8) {
       dna.arms = { length: legLen * range(0.7, 0.9), thickness: range(0.04, 0.07) };
     }

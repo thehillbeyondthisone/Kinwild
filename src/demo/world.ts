@@ -41,7 +41,7 @@ export class Puffs {
           vec3 p = position + vec3(aData.z * age, age * (0.55 - 0.4 * t), aData.w * age);
           vec4 mv = modelViewMatrix * vec4(p, 1.0);
           // aData.y is a world-space radius; convert to pixels by depth.
-          gl_PointSize = aData.y * (0.5 + t * 1.3) * (720.0 / -mv.z);
+          gl_PointSize = aData.y * (0.5 + t * 1.3) * (420.0 / -mv.z);
           gl_Position = projectionMatrix * mv;
         }
       `,
@@ -52,7 +52,7 @@ export class Puffs {
           float d = dot(uv, uv);
           if (d > 1.0) discard;
           float soft = smoothstep(1.0, 0.35, d);
-          gl_FragColor = vec4(0.98, 0.95, 0.88, soft * vFade * 0.7);
+          gl_FragColor = vec4(0.98, 0.95, 0.88, soft * vFade * 0.5);
         }
       `,
     });

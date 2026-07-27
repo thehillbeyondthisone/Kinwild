@@ -62,6 +62,8 @@ export interface RopeDNA {
   length: number;
   thickness: number;
   color?: number;
+  /** ears only: droop instead of standing up (puppy ears). */
+  floppy?: boolean;
 }
 
 export interface CritterDNA {

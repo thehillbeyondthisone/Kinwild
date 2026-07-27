@@ -62,7 +62,7 @@ const roster: Roaming[] = [];
 
 function addCritter(critter: Critter, slot: number): void {
   scene.add(critter.group);
-  critter.setLandHandler((pos, s) => world.puffs.spawn(pos, 2 + Math.round(s * 4), s, nowT));
+  critter.setLandHandler((pos, s) => world.puffs.spawn(pos, 1 + Math.round(s * 3), s, nowT));
   const golden = slot * 2.4;
   roster.push({
     critter,

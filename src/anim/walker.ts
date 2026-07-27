@@ -5,7 +5,7 @@ import { edgesToLists } from '../core/blendGraph';
 import { BodyFrame, GaitEngine, GaitLegConfig } from './gait';
 import { dampAngle, placeSegment, solveTwoBone, yawQuat } from './ik';
 import { Rope } from './rope';
-import { CritterEyes } from './eyes';
+import { CritterEyes, EyesConfig } from './eyes';
 
 export interface WalkerRopeDef {
   anchor: THREE.Vector3;
@@ -44,7 +44,13 @@ export interface WalkerArmDef {
 export interface WalkerDef {
   /** Body prims: spec + offset in body space. First prim is the blend hub. */
   body: { spec: PrimitiveSpec; offset: THREE.Vector3; lieFlat?: boolean }[];
-  head?: { spec: PrimitiveSpec; offset: THREE.Vector3; eyes?: { r: number; spread: number; y: number } };
+  head?: {
+    spec: PrimitiveSpec;
+    offset: THREE.Vector3;
+    eyes?: EyesConfig;
+    /** muzzle/beak that follows the head; offset is head-relative */
+    snout?: { spec: PrimitiveSpec; offset: THREE.Vector3 };
+  };
   legs: WalkerLegDef[];
   arms?: WalkerArmDef[];
   ropes?: WalkerRopeDef[];
@@ -85,6 +91,7 @@ export class Walker {
   private legPrim0: number; // index of first leg prim (2 per leg)
   private armPrim0 = -1;
   private headPrim = -1;
+  private snoutPrim = -1;
   private ropes: { rope: Rope; prim0: number; segLen: number }[] = [];
   private eyes?: CritterEyes;
   private target = new THREE.Vector3();
@@ -106,6 +113,11 @@ export class Walker {
       this.headPrim = specs.length;
       specs.push(def.head.spec);
       edges.push([0, this.headPrim]);
+      if (def.head.snout) {
+        this.snoutPrim = specs.length;
+        specs.push(def.head.snout.spec);
+        edges.push([this.headPrim, this.snoutPrim]);
+      }
     }
     // Hosts pick the nearest anchor prim with neighbor budget left, so a
     // busy hub (hexapod front segment) sheds attachments to its neighbor
@@ -254,6 +266,14 @@ export class Walker {
       h.position.copy(def.head!.offset).applyQuaternion(this.body.quat).add(this.body.pos);
       h.position.y += Math.sin(this.gait.phase * 2 + 0.9) * 0.012;
       h.quaternion.copy(this.body.quat);
+      if (this.snoutPrim >= 0) {
+        const s = prims[this.snoutPrim];
+        s.position.copy(def.head!.snout!.offset).applyQuaternion(h.quaternion).add(h.position);
+        // Cone axis Y → +Z so the snout points forward.
+        s.quaternion.copy(h.quaternion).multiply(
+          new THREE.Quaternion().setFromEuler(_e.set(Math.PI / 2, 0, 0)),
+        );
+      }
       this.eyes?.track(h.position, h.quaternion, time);
     }
 

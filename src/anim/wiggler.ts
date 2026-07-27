@@ -3,13 +3,13 @@ import { BlendShellCharacter } from '../core/characterMesh';
 import { PrimitiveSpec } from '../core/primitives';
 import { edgesToLists } from '../core/blendGraph';
 import { dampAngle } from './ik';
-import { CritterEyes } from './eyes';
+import { CritterEyes, EyesConfig } from './eyes';
 
 export interface WigglerDef {
   /** head-first chain of spheres */
   segments: { r: number; color: THREE.ColorRepresentation }[];
   segLen: number;
-  eyes?: { r: number; spread: number; y: number };
+  eyes?: EyesConfig;
   swayAmp?: number;
   swayHz?: number;
 }

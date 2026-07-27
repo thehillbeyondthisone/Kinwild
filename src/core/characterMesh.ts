@@ -87,7 +87,8 @@ export class BlendShellCharacter {
     this.mainMesh.customDepthMaterial = this.materials.depth;
     this.mainMesh.customDistanceMaterial = this.materials.distance;
     this.mainMesh.castShadow = true;
-    this.mainMesh.receiveShadow = true;
+    // Toon bodies cast but never receive — self-shadowing reads as dirt.
+    this.mainMesh.receiveShadow = false;
     this.outlineMesh = new THREE.Mesh(geometry, this.materials.outline);
     // Prim transforms live in world space inside the uniforms, so Three's
     // frustum culling (which uses rest-pose bounds) must not interfere.

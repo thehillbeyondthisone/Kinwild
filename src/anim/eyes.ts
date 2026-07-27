@@ -5,6 +5,8 @@ export interface EyesConfig {
   r: number;
   spread: number;
   y: number;
+  /** forward (+z) offset from the head center — push eyes onto the skin. */
+  forward?: number;
 }
 
 let whiteMat: THREE.MeshToonMaterial | null = null;
@@ -24,7 +26,7 @@ export class CritterEyes {
     pupilMat ??= new THREE.MeshBasicMaterial({ color: 0x1a1c2c });
     for (const side of [-1, 1]) {
       const eye = new THREE.Mesh(new THREE.SphereGeometry(cfg.r, 16, 12), whiteMat);
-      eye.position.set(side * cfg.spread, cfg.y, 0);
+      eye.position.set(side * cfg.spread, cfg.y, cfg.forward ?? 0);
       const pupil = new THREE.Mesh(new THREE.SphereGeometry(cfg.r * 0.55, 12, 10), pupilMat);
       pupil.position.z = cfg.r * 0.62;
       eye.add(pupil);
