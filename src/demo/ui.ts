@@ -1,7 +1,7 @@
 import GUI from 'lil-gui';
 import { Critter } from '../creatures/factory';
 import { CritterDNA } from '../creatures/schema';
-import { dreamCritter } from '../creatures/dream';
+import { dreamCritter, listModels } from '../creatures/dream';
 import { encodeDNA } from './share';
 
 export interface UiHooks {
@@ -113,33 +113,57 @@ export function buildUi(hooks: UiHooks): Ui {
   }
 
   // --- dream a critter (local LM Studio) ---
+  const WHATEVER_IS_LOADED = '(whatever is loaded)';
   const dream = gui.addFolder('🧬 dream a critter');
   const dreamParams = {
     describe: 'a grumpy mossy tank with droopy antennae',
-    model: '',
+    model: WHATEVER_IS_LOADED,
     go: () => runDream(),
   };
   dream.add(dreamParams, 'describe').name('describe');
-  dream.add(dreamParams, 'model').name('model (blank = loaded)');
-  const goCtrl = dream.add(dreamParams, 'go').name('✨ dream it');
+  let modelCtrl = dream.add(dreamParams, 'model', [WHATEVER_IS_LOADED]).name('model');
+  let goCtrl = dream.add(dreamParams, 'go').name('✨ dream it');
+  let modelIds: string[] = [];
+
+  function setModelOptions(ids: string[]): void {
+    if (ids.join() === modelIds.join()) return;
+    modelIds = ids;
+    const opts = [WHATEVER_IS_LOADED, ...ids];
+    if (!opts.includes(dreamParams.model)) dreamParams.model = WHATEVER_IS_LOADED;
+    modelCtrl = modelCtrl.options(opts).name('model');
+    // options() destroys the controller and appends the replacement, so the
+    // button has to be rebuilt too or it would end up above the dropdown.
+    goCtrl.destroy();
+    goCtrl = dream.add(dreamParams, 'go').name('✨ dream it');
+  }
+
+  function refreshModels(): void {
+    listModels().then(setModelOptions, () => setModelOptions([]));
+  }
+  refreshModels();
+  // Re-check on open: models get loaded and unloaded while the demo runs.
+  dream.onOpenClose((f) => {
+    if (!f._closed) refreshModels();
+  });
 
   async function runDream(): Promise<void> {
     goCtrl.name('dreaming…').disable();
-    params.status = 'asking LM Studio…';
-    statusCtrl.updateDisplay();
+    setStatus('asking LM Studio…');
     try {
-      const dna = await dreamCritter(dreamParams.describe, { model: dreamParams.model });
+      const model = dreamParams.model === WHATEVER_IS_LOADED ? '' : dreamParams.model;
+      const dna = await dreamCritter(dreamParams.describe, { model });
       hooks.importDNA([dna]);
-      params.status = `dreamed "${dna.name}"`;
+      setStatus(`dreamed "${dna.name}"`);
     } catch (e) {
       const msg = (e as Error).message;
-      params.status = /reachable|fetch|NetworkError|Failed/i.test(msg)
-        ? 'LM Studio not reachable on :1234'
-        : `dream failed: ${msg.slice(0, 40)}`;
+      setStatus(
+        /reachable|fetch|NetworkError|Failed/i.test(msg)
+          ? 'LM Studio not reachable on :1234'
+          : `dream failed: ${msg.slice(0, 40)}`,
+      );
       console.warn('[dream]', e);
     }
     goCtrl.name('✨ dream it').enable();
-    statusCtrl.updateDisplay();
   }
 
   // --- selection + live DNA editor ---

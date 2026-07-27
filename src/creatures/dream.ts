@@ -92,6 +92,20 @@ export function extractDNA(text: string): CritterDNA {
   }
 }
 
+/**
+ * Chat-capable model ids the local server currently offers. Embedding
+ * models are filtered out — they appear in the same list but cannot answer
+ * a chat completion, so offering them would only invite a confusing error.
+ */
+export async function listModels(endpoint = '/llm/v1/models'): Promise<string[]> {
+  const res = await fetch(endpoint);
+  if (!res.ok) throw new Error(`models endpoint returned ${res.status}`);
+  const json = (await res.json()) as { data?: { id?: string }[] };
+  return (json.data ?? [])
+    .map((m) => m.id)
+    .filter((id): id is string => !!id && !/embed/i.test(id));
+}
+
 export interface DreamOptions {
   /** Model id; '' lets LM Studio use whatever is loaded. */
   model?: string;
