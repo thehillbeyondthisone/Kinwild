@@ -89,6 +89,12 @@ sloppy generated input degrades gracefully to a valid, seamless critter.
 [generate.ts](src/creatures/generate.ts) turns any seed into new DNA
 (HSL-harmony palettes, proportion ranges the validator likes).
 
+**Import/export**: the *critter DNA* panel exports the whole roster as
+`critters.json` and imports a single DNA object or an array — via the
+file picker or by dropping a `.json` anywhere on the page. Imports run
+through the same normalizer, so hand-edited or LLM-written JSON is safe
+to feed in directly.
+
 ## Performance notes
 
 Vertex-bound by design (resolution-independent — verified by profiling):

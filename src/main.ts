@@ -95,6 +95,17 @@ const ui = buildUi({
   spawnRandom,
   clearSpawned,
   critters: () => roster.map((r) => r.critter),
+  // Import runs through the normalizing factory, so hand-edited or
+  // AI-generated JSON degrades gracefully instead of crashing.
+  importDNA: (list) => {
+    let n = 0;
+    for (const dna of list) {
+      addCritter(createCritter(dna), roster.length);
+      n++;
+    }
+    return n;
+  },
+  exportDNA: () => roster.map((r) => r.critter.dna),
 });
 
 const _target = new THREE.Vector3();
