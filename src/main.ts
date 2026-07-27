@@ -7,6 +7,7 @@ import { buildWorld } from './demo/world';
 import { buildUi } from './demo/ui';
 import { Roam } from './demo/roam';
 import { enablePetting } from './demo/pet';
+import { decodeDNAFromHash } from './demo/share';
 import { sunDirUniform } from './shaders/materials';
 
 const app = document.getElementById('app')!;
@@ -106,7 +107,19 @@ const ui = buildUi({
     return n;
   },
   exportDNA: () => roster.map((c) => c.dna),
+  replaceCritter: (old, dna) => {
+    const i = roster.indexOf(old);
+    if (i < 0) return;
+    roam.remove(old);
+    scene.remove(old.group);
+    old.dispose();
+    roster.splice(i, 1);
+    addCritter(createCritter(dna));
+  },
 });
+
+// A shared link spawns its critters alongside the library.
+decodeDNAFromHash().forEach((dna) => addCritter(createCritter(dna)));
 
 function update(t: number, dt: number): void {
   nowT = t;

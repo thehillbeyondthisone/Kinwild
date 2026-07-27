@@ -95,6 +95,25 @@ file picker or by dropping a `.json` anywhere on the page. Imports run
 through the same normalizer, so hand-edited or LLM-written JSON is safe
 to feed in directly.
 
+**Describe a critter** (*🧬 dream a critter* panel): type a description
+and a local [LM Studio](https://lmstudio.ai) server turns it into DNA
+that spawns immediately. Start LM Studio with any chat model loaded on
+its default port; Vite proxies `/llm` → `localhost:1234`, so the browser
+stays same-origin and no key is involved (point `LLM_URL` elsewhere for
+another OpenAI-compatible server). The prompt in
+[dream.ts](src/creatures/dream.ts) embeds the schema plus two library
+critters as few-shot examples, and the reply parser tolerates markdown
+fences and chatter — small local models are rarely clean, and the
+normalizer catches whatever slips through.
+
+**Editing & sharing**: the *edit* panel opens a critter's DNA in a live
+textarea — apply rebuilds it in place — and copies a share link with the
+DNA packed into the URL hash (~700 chars, no server involved).
+
+Because clamping alone would leave a shrunk-to-fit body wearing its
+original ear sizes, the normalizer also **rescales the whole critter** by
+whatever factor the body was resized by, so imported proportions survive.
+
 ## Performance notes
 
 Vertex-bound by design (resolution-independent — verified by profiling):

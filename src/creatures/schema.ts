@@ -120,6 +120,7 @@ export function normalizeDNA(dna: CritterDNA): { dna: CritterDNA; notes: string[
     out.body = fix('missing body → default blob', [{ shape: 'sphere', size: [0.22] }]);
   }
   out.body = out.body.slice(0, 3);
+  const askedR0 = out.body[0]?.size?.[0];
   for (const seg of out.body) {
     if (!['sphere', 'capsule', 'cone'].includes(seg.shape)) seg.shape = 'sphere';
     seg.size = (seg.size ?? [0.2]).map((s) => clamp(s, 0.03, 0.6));
@@ -127,10 +128,58 @@ export function normalizeDNA(dna: CritterDNA): { dna: CritterDNA; notes: string[
     if (seg.at) seg.at = seg.at.map((v) => clamp(v, -0.8, 0.8)) as [number, number, number];
   }
 
+  // If the body had to be resized to fit, resize everything else by the same
+  // factor. Clamping alone would keep the author's absolute ear/leg numbers
+  // against a body that shrank 8x, which is how you get pin-eared giants.
+  const bodyScale =
+    Number.isFinite(askedR0) && askedR0! > 1e-4 ? out.body[0].size[0] / askedR0! : 1;
+  if (Math.abs(bodyScale - 1) > 0.01) {
+    notes.push(`body resized ×${bodyScale.toFixed(2)}; scaled the rest to match`);
+    const s3 = (v?: [number, number, number]) =>
+      (v ? (v.map((n) => n * bodyScale) as [number, number, number]) : v);
+    if (out.head) {
+      out.head.size *= bodyScale;
+      out.head.at = s3(out.head.at)!;
+      if (out.head.eyes) out.head.eyes *= bodyScale;
+      if (out.head.beak) out.head.beak = [out.head.beak[0] * bodyScale, out.head.beak[1] * bodyScale];
+    }
+    if (out.legs) {
+      out.legs.length *= bodyScale;
+      out.legs.thickness *= bodyScale;
+      out.legs.stance *= bodyScale;
+      if (out.legs.spread) out.legs.spread *= bodyScale;
+    }
+    if (out.arms) {
+      out.arms.length *= bodyScale;
+      out.arms.thickness *= bodyScale;
+      if (out.arms.height) out.arms.height *= bodyScale;
+    }
+    if (out.wings) {
+      out.wings.length *= bodyScale;
+      out.wings.thickness *= bodyScale;
+    }
+    for (const r of out.ropes ?? []) {
+      r.length *= bodyScale;
+      r.thickness *= bodyScale;
+      r.at = s3(r.at)!;
+    }
+  }
+
+  // Everything below is clamped RELATIVE to body size. Absolute-only limits
+  // let a big imported body keep pin-sized ears; proportional limits mean a
+  // critter scaled anywhere in range still reads as the same creature.
+  const r0 = out.body[0].size[0];
+
   if (out.head) {
-    out.head.size = clamp(out.head.size, 0.05, 0.4);
+    out.head.size = clamp(out.head.size, r0 * 0.3, r0 * 1.2);
     out.head.at = out.head.at?.map((v) => clamp(v, -0.9, 0.9)) as [number, number, number] ?? [0, 0.25, 0.2];
-    if (out.head.eyes) out.head.eyes = clamp(out.head.eyes, 0.015, out.head.size * 0.45);
+    if (out.head.eyes) out.head.eyes = clamp(out.head.eyes, out.head.size * 0.12, out.head.size * 0.42);
+    if (out.head.beak) {
+      out.head.beak = [
+        clamp(out.head.beak[0], out.head.size * 0.15, out.head.size * 0.7),
+        clamp(out.head.beak[1], out.head.size * 0.3, out.head.size * 1.6),
+      ];
+    }
   }
 
   if (out.mode === 'walker') {
@@ -138,28 +187,28 @@ export function normalizeDNA(dna: CritterDNA): { dna: CritterDNA; notes: string[
     if (![2, 4, 6].includes(out.legs.count)) {
       out.legs.count = fix(`leg count ${out.legs.count} → nearest of 2/4/6`, (out.legs.count < 3 ? 2 : out.legs.count < 5 ? 4 : 6) as 2 | 4 | 6);
     }
-    out.legs.length = clamp(out.legs.length, 0.15, 0.9);
-    out.legs.thickness = clamp(out.legs.thickness, 0.025, out.legs.length * 0.35);
-    out.legs.stance = clamp(out.legs.stance, 0.05, 0.5);
-    if (out.legs.count > 2) out.legs.spread = clamp(out.legs.spread ?? 0.25, 0.1, 0.7);
+    out.legs.length = clamp(out.legs.length, r0 * 0.8, r0 * 3.5);
+    out.legs.thickness = clamp(out.legs.thickness, r0 * 0.12, out.legs.length * 0.32);
+    out.legs.stance = clamp(out.legs.stance, r0 * 0.3, r0 * 1.3);
+    if (out.legs.count > 2) out.legs.spread = clamp(out.legs.spread ?? r0, r0 * 0.5, r0 * 2.2);
   }
   if (out.arms) {
-    out.arms.length = clamp(out.arms.length, 0.1, 0.7);
-    out.arms.thickness = clamp(out.arms.thickness, 0.02, 0.12);
+    out.arms.length = clamp(out.arms.length, r0 * 0.6, r0 * 2.6);
+    out.arms.thickness = clamp(out.arms.thickness, r0 * 0.1, r0 * 0.42);
   }
   if (out.mode === 'flyer' && !out.wings) {
     out.wings = fix('flyer without wings → default wings', { length: 0.28, thickness: 0.05 });
   }
   if (out.wings) {
-    out.wings.length = clamp(out.wings.length, 0.12, 0.6);
-    out.wings.thickness = clamp(out.wings.thickness, 0.02, 0.1);
+    out.wings.length = clamp(out.wings.length, r0 * 0.8, r0 * 3);
+    out.wings.thickness = clamp(out.wings.thickness, r0 * 0.12, r0 * 0.45);
   }
   out.ropes = (out.ropes ?? []).slice(0, 4);
   for (const r of out.ropes) {
     if (!['ear', 'tail', 'antenna'].includes(r.kind)) r.kind = 'tail';
     r.segments = Math.round(clamp(r.segments ?? 2, 1, 4));
-    r.length = clamp(r.length, 0.06, 0.6);
-    r.thickness = clamp(r.thickness, 0.02, 0.12);
+    r.length = clamp(r.length, r0 * 0.3, r0 * 2.5);
+    r.thickness = clamp(r.thickness, r0 * 0.08, r0 * 0.45);
     r.at = r.at?.map((v) => clamp(v, -0.9, 0.9)) as [number, number, number] ?? [0, 0, -0.2];
   }
   if (out.pattern) {

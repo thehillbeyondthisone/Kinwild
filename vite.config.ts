@@ -33,5 +33,14 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    proxy: {
+      // Local LM Studio (or any OpenAI-compatible server). Proxying keeps
+      // the browser same-origin, so no CORS config on the server side.
+      '/llm': {
+        target: process.env.LLM_URL ?? 'http://localhost:1234',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/llm/, ''),
+      },
+    },
   },
 });
