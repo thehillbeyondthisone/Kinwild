@@ -32,8 +32,12 @@ uniform vec3 uTuck;
 uniform float uGradEps;
 // isosurface target offset: 0 for skin, +outlineWidth for the outline hull
 uniform float uSurfOffset;
+// x: reference camera distance for outline width, y/z: min/max scale factor
+uniform vec3 uOutlineComp;
 
 varying vec3 vShellColor;
+// depth of penetration into other primitives, for outline fragment culling
+varying float vShellBurial;
 
 vec3 qrot(vec4 q, vec3 v) { return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v); }
 vec3 qrotInv(vec4 q, vec3 v) { return qrot(vec4(-q.xyz, q.w), v); }
@@ -117,7 +121,7 @@ float othersDist(vec3 p, ivec4 A, ivec4 B) {
   return d;
 }
 
-vec3 sPos; vec3 sNrm; vec3 sCol;
+vec3 sPos; vec3 sNrm; vec3 sCol; float sBurial;
 
 void blendShell(vec3 rawPos, out vec3 oPos, out vec3 oNrm, out vec3 oCol) {
   int base = int(aPrim + 0.5);
@@ -127,14 +131,23 @@ void blendShell(vec3 rawPos, out vec3 oPos, out vec3 oNrm, out vec3 oCol) {
 
   vec3 p = qrot(uPrimQuat[base], rawPos * uPrimScale[base].xyz) + uPrimPosK[base].xyz;
 
-  // Vertices swallowed by another primitive dive under the skin in EVERY
-  // pass (the outline hull included — otherwise their triangles would
-  // emerge across concave creases as visible webbing). The buried/exposed
-  // transition triangles pierce the skin right at the crease, which reads
-  // as a thin ink line — a feature for the toon style.
+  // Outline width scales with camera distance so it stays near-constant in
+  // screen space (uSurfOffset is 0 in non-outline passes, so this is inert).
+  float distScale = clamp(
+    distance(cameraPosition, uPrimPosK[base].xyz) / max(uOutlineComp.x, 1e-3),
+    uOutlineComp.y, uOutlineComp.z);
+  float surf = uSurfOffset * distScale;
+
+  // Buried vertices (swallowed by another primitive) dive just under the
+  // skin in the surface/shadow passes, killing coplanar z-fighting. The
+  // outline pass instead keeps everything on the hull and discards buried
+  // FRAGMENTS — any vertex-position scheme would drag triangles through
+  // the visible skin somewhere, but discarded webbing simply vanishes and
+  // the hull stays covered by the other primitive's exposed carriers.
   float burial = max(0.0, -othersDist(p, A, B));
+  sBurial = burial;
   float tuckAmt = smoothstep(uTuck.y, uTuck.z, burial);
-  float target = mix(uSurfOffset, -uTuck.x, tuckAmt);
+  float target = uSurfOffset > 0.0 ? surf : mix(0.0, -uTuck.x, tuckAmt);
 
   for (int i = 0; i < 3; i++) {
     float f = fieldFast(p, A, B, kS) - target;
@@ -153,4 +166,14 @@ void blendShell(vec3 rawPos, out vec3 oPos, out vec3 oNrm, out vec3 oCol) {
 export const shellCompute = /* glsl */ `
 blendShell(position, sPos, sNrm, sCol);
 vShellColor = sCol;
+vShellBurial = sBurial;
+`;
+
+/** Fragment-side culling for the outline hull pass. */
+export const outlineFragPars = /* glsl */ `
+varying float vShellBurial;
+uniform float uBurialCut;
+`;
+export const outlineFragCut = /* glsl */ `
+if (vShellBurial > uBurialCut) discard;
 `;

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { shellPars, shellCompute } from './chunks';
+import { shellPars, shellCompute, outlineFragPars, outlineFragCut } from './chunks';
 
 export interface ShellUniforms {
   uPrimPosK: THREE.IUniform<Float32Array>;
@@ -23,7 +23,7 @@ export interface ShellUniforms {
 function injectShell(
   material: THREE.Material,
   uniforms: Record<string, THREE.IUniform>,
-  opts: { colored?: boolean; cacheKey: string },
+  opts: { colored?: boolean; discardBuried?: boolean; cacheKey: string },
 ): void {
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
@@ -41,6 +41,11 @@ function injectShell(
           '#include <color_fragment>',
           '#include <color_fragment>\n  diffuseColor.rgb *= vShellColor;',
         );
+    }
+    if (opts.discardBuried) {
+      shader.fragmentShader =
+        outlineFragPars +
+        shader.fragmentShader.replace('void main() {', 'void main() {\n' + outlineFragCut);
     }
   };
   material.customProgramCacheKey = () => opts.cacheKey;
@@ -82,7 +87,11 @@ export function makeShellMaterials(
     color: opts.outlineColor ?? 0x1a1c2c,
     side: THREE.BackSide,
   });
-  injectShell(outline, { ...uniforms, uSurfOffset: outlineWidth }, { cacheKey: 'shell-outline' });
+  injectShell(
+    outline,
+    { ...uniforms, uSurfOffset: outlineWidth, uBurialCut: { value: 0.01 } },
+    { discardBuried: true, cacheKey: 'shell-outline' },
+  );
 
   // Shadow passes must see the same deformed silhouette as the beauty pass.
   const depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });

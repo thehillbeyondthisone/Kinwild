@@ -74,6 +74,7 @@ export class BlendShellCharacter {
       uPrimInfl: { value: packInfluences(influences, MAX_PRIMS) },
       uTuck: { value: new THREE.Vector3(0.02, 0.005, 0.035) },
       uGradEps: { value: opts.gradEps ?? 0.012 },
+      uOutlineComp: { value: new THREE.Vector3(4, 0.6, 2.5) },
     };
 
     const geometry = mergeCarriers(specs.map(makeCarrierGeometry));

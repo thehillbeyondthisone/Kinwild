@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { BlendShellCharacter } from './core/characterMesh';
-import { fullyConnected } from './core/blendGraph';
+import { edgesToLists, fullyConnected } from './core/blendGraph';
 
 const app = document.getElementById('app')!;
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -43,26 +43,67 @@ ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
 
-// --- Milestone 1 proof: overlapping primitives render as one seamless blob ---
+// --- Milestone 2 rig: blend-graph isolation, squash-stretch, shadows ---
+// 0 torso, 1 head, 2/3 arms (blend with torso), 4/5 crossing tails that are
+// NOT graph neighbors of each other — they must overlap crisply, never weld.
 const blob = new BlendShellCharacter(
   [
-    { type: 'capsule', r: 0.34, hl: 0.28, color: 0xf2994a, blend: 0.22 }, // torso
-    { type: 'capsule', r: 0.2, hl: 0.3, color: 0x5bb0f0, blend: 0.22 }, // arm-ish cross
-    { type: 'sphere', r: 0.28, color: 0xf7d154, blend: 0.2 }, // head
+    { type: 'cone', r: 0.34, r2: 0.26, hl: 0.28, color: 0xf2994a, blend: 0.2 },
+    { type: 'sphere', r: 0.26, color: 0xf7d154, blend: 0.18 },
+    { type: 'capsule', r: 0.11, hl: 0.26, color: 0x5bb0f0, blend: 0.14 },
+    { type: 'capsule', r: 0.11, hl: 0.26, color: 0x5bb0f0, blend: 0.14 },
+    { type: 'capsule', r: 0.09, hl: 0.34, color: 0x7ed07e, blend: 0.12 },
+    { type: 'capsule', r: 0.09, hl: 0.34, color: 0xb98ae0, blend: 0.12 },
   ],
-  { influences: fullyConnected(3), outlineWidth: 0.025 },
+  {
+    influences: edgesToLists(6, [
+      [0, 1],
+      [0, 2],
+      [0, 3],
+      [0, 4],
+      [0, 5],
+    ]),
+    outlineWidth: 0.025,
+  },
 );
 scene.add(blob.group);
 
+// Separate squash tester: sphere on a stubby base, y-scale animated.
+const squash = new BlendShellCharacter(
+  [
+    { type: 'capsule', r: 0.22, hl: 0.12, color: 0xe86a6a, blend: 0.16 },
+    { type: 'sphere', r: 0.26, color: 0xf0c05a, blend: 0.16 },
+  ],
+  { influences: fullyConnected(2), outlineWidth: 0.025 },
+);
+scene.add(squash.group);
+
 const clock = new THREE.Clock();
+const euler = new THREE.Euler();
 function update(t: number): void {
-  const [torso, arm, head] = blob.prims;
+  const [torso, head, armL, armR, tailA, tailB] = blob.prims;
   torso.position.set(0, 0.85, 0);
-  torso.quaternion.setFromEuler(new THREE.Euler(0, 0, Math.sin(t * 0.8) * 0.12));
-  arm.position.set(Math.sin(t * 0.7) * 0.25, 0.95 + Math.sin(t * 1.3) * 0.1, 0);
-  arm.quaternion.setFromEuler(new THREE.Euler(0, 0, Math.PI / 2 + Math.sin(t * 0.9) * 0.5));
-  head.position.set(0, 1.45 + Math.sin(t * 1.1) * 0.06, 0.05);
+  torso.quaternion.setFromEuler(euler.set(0, 0, Math.sin(t * 0.8) * 0.08));
+  head.position.set(0, 1.35 + Math.sin(t * 1.1) * 0.05, 0.06);
+  const swing = Math.sin(t * 1.4) * 0.5;
+  armL.position.set(-0.42, 1.0, 0);
+  armL.quaternion.setFromEuler(euler.set(0, 0, 1.9 + swing * 0.4));
+  armR.position.set(0.42, 1.0, 0);
+  armR.quaternion.setFromEuler(euler.set(0, 0, -1.9 + swing * 0.4));
+  // Tails scissor across each other behind the body — the welding test.
+  const cross = Math.sin(t * 0.9) * 0.5;
+  tailA.position.set(-0.15, 0.55, -0.35);
+  tailA.quaternion.setFromEuler(euler.set(0.9, 0, -0.7 + cross));
+  tailB.position.set(0.15, 0.55, -0.35);
+  tailB.quaternion.setFromEuler(euler.set(0.9, 0, 0.7 - cross));
   blob.sync();
+
+  const [base, ball] = squash.prims;
+  base.position.set(-1.4, 0.16, 0.3);
+  const s = 1 + Math.sin(t * 3) * 0.45;
+  ball.position.set(-1.4, 0.42 + (s - 1) * 0.2, 0.3);
+  ball.scale.set(1 / Math.sqrt(s), s, 1 / Math.sqrt(s));
+  squash.sync();
 }
 
 function tick(): void {
@@ -79,6 +120,7 @@ requestAnimationFrame(tick);
   scene,
   camera,
   blob,
+  squash,
   tickOnce: (t?: number) => {
     update(t ?? clock.getElapsedTime());
     renderer.render(scene, camera);
