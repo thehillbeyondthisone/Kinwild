@@ -37,10 +37,20 @@ function injectShell(
     if (opts.colored) {
       shader.fragmentShader =
         'varying vec3 vShellColor;\n' +
-        shader.fragmentShader.replace(
-          '#include <color_fragment>',
-          '#include <color_fragment>\n  diffuseColor.rgb *= vShellColor;',
-        );
+        shader.fragmentShader
+          .replace(
+            '#include <color_fragment>',
+            '#include <color_fragment>\n  diffuseColor.rgb *= vShellColor;',
+          )
+          // Cool rim on the silhouette — cheap depth cue that sells the toon look.
+          .replace(
+            '#include <emissivemap_fragment>',
+            `#include <emissivemap_fragment>
+  {
+    float rim = pow(1.0 - clamp(dot(normalize(vViewPosition), normalize(vNormal)), 0.0, 1.0), 3.0);
+    totalEmissiveRadiance += vShellColor * rim * 0.22 + vec3(0.04, 0.05, 0.08) * rim;
+  }`,
+          );
     }
     if (opts.discardBuried) {
       shader.fragmentShader =

@@ -3,6 +3,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createCritter, Critter } from './creatures/factory';
 import { LIBRARY } from './creatures/library';
 import { generateDNA } from './creatures/generate';
+import { buildWorld } from './demo/world';
+import { buildUi } from './demo/ui';
 
 const app = document.getElementById('app')!;
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -23,9 +25,9 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 0.6, 0);
 controls.enableDamping = true;
 
-const hemi = new THREE.HemisphereLight(0xbfe8ff, 0x7a9a5a, 0.9);
+const hemi = new THREE.HemisphereLight(0xbfe8ff, 0x7a9a5a, 0.65);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xfff2d9, 2.2);
+const sun = new THREE.DirectionalLight(0xfff2d9, 2.5);
 sun.position.set(4, 7, 3);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
@@ -44,6 +46,9 @@ ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
 
+const world = buildWorld(scene);
+let nowT = 0;
+
 // --- critters from DNA ---
 interface Roaming {
   critter: Critter;
@@ -57,6 +62,7 @@ const roster: Roaming[] = [];
 
 function addCritter(critter: Critter, slot: number): void {
   scene.add(critter.group);
+  critter.setLandHandler((pos, s) => world.puffs.spawn(pos, 2 + Math.round(s * 4), s, nowT));
   const golden = slot * 2.4;
   roster.push({
     critter,
@@ -77,8 +83,24 @@ function spawnRandom(seed?: number): Critter {
   return critter;
 }
 
+function clearSpawned(): void {
+  while (roster.length > LIBRARY.length) {
+    const r = roster.pop()!;
+    scene.remove(r.critter.group);
+    r.critter.dispose();
+  }
+}
+
+const ui = buildUi({
+  spawnRandom,
+  clearSpawned,
+  critters: () => roster.map((r) => r.critter),
+});
+
 const _target = new THREE.Vector3();
 function update(t: number, dt: number): void {
+  nowT = t;
+  world.update(t);
   for (const r of roster) {
     const a = t * r.w + r.phase;
     _target.set(r.cx + Math.sin(a) * r.radius, 0, r.cz + Math.cos(a) * r.radius);
@@ -89,6 +111,8 @@ function update(t: number, dt: number): void {
 
 const clock = new THREE.Clock();
 let last = 0;
+let fpsAccum = 0;
+let fpsFrames = 0;
 function tick(): void {
   const t = clock.getElapsedTime();
   const dt = Math.min(t - last, 0.05);
@@ -96,6 +120,14 @@ function tick(): void {
   update(t, dt);
   controls.update();
   renderer.render(scene, camera);
+
+  fpsAccum += dt;
+  fpsFrames++;
+  if (fpsAccum >= 0.5) {
+    ui.setFps(fpsFrames / fpsAccum, renderer.info.render.calls, renderer.info.render.triangles);
+    fpsAccum = 0;
+    fpsFrames = 0;
+  }
   requestAnimationFrame(tick);
 }
 requestAnimationFrame(tick);

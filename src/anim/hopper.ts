@@ -4,7 +4,7 @@ import { PrimitiveSpec } from '../core/primitives';
 import { edgesToLists } from '../core/blendGraph';
 import { dampAngle, placeSegment, yawQuat } from './ik';
 import { Rope } from './rope';
-import { getToonGradient } from '../shaders/materials';
+import { CritterEyes } from './eyes';
 
 export interface HopperDef {
   body: PrimitiveSpec;
@@ -46,11 +46,13 @@ export class Hopper {
   pos = new THREE.Vector3();
   heading = 0;
   hopLen = 0.9;
+  /** Fired on landing; strength scales with impact speed. */
+  onLand?: (pos: THREE.Vector3, strength: number) => void;
 
   private def: HopperDef;
   private ropes: { rope: Rope; prim0: number; segLen: number; r: number }[] = [];
   private feet0 = -1;
-  private eyes?: THREE.Group;
+  private eyes?: CritterEyes;
   private state: HopState = 'idle';
   private stateT = 0;
   private pause = 0.4;
@@ -96,18 +98,8 @@ export class Hopper {
     this.group.add(this.character.group);
 
     if (def.eyes) {
-      this.eyes = new THREE.Group();
-      const white = new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: getToonGradient() });
-      const black = new THREE.MeshBasicMaterial({ color: 0x1a1c2c });
-      for (const side of [-1, 1]) {
-        const eye = new THREE.Mesh(new THREE.SphereGeometry(def.eyes.r, 16, 12), white);
-        eye.position.set(side * def.eyes.spread, def.eyes.y, 0);
-        const pupil = new THREE.Mesh(new THREE.SphereGeometry(def.eyes.r * 0.55, 12, 10), black);
-        pupil.position.z = def.eyes.r * 0.62;
-        eye.add(pupil);
-        this.eyes.add(eye);
-      }
-      this.group.add(this.eyes);
+      this.eyes = new CritterEyes(def.eyes);
+      this.group.add(this.eyes.group);
     }
   }
 
@@ -167,9 +159,13 @@ export class Hopper {
           this.pos.y = def.restHeight;
           this.squash = 1 - Math.min(-this.vel.y * 0.05, 0.32); // impact
           this.squashV = 0;
+          const impact = Math.min(-this.vel.y * 0.28, 1);
           this.vel.set(0, 0, 0);
           this.pause = 0.25 + Math.random() * 0.5;
           this.setState('land');
+          _tmp.copy(this.pos);
+          _tmp.y = 0;
+          this.onLand?.(_tmp, impact);
         }
         break;
       }
@@ -222,10 +218,10 @@ export class Hopper {
     prims[1].quaternion.copy(q);
     prims[1].scale.set(sxz, sy, sxz);
     if (this.eyes) {
-      this.eyes.position.copy(prims[1].position);
-      this.eyes.quaternion.copy(q);
+      this.eyes.track(prims[1].position, q, time);
+      // Counter most of the body squash so eyes stay round-ish.
       const es = 1 / Math.max(sy, 0.6);
-      this.eyes.scale.set(1, Math.min(es, 1.15), 1);
+      this.eyes.group.scale.set(1, Math.min(es, 1.15), 1);
     }
 
     this.ropes.forEach((r, i) => {

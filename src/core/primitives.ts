@@ -42,8 +42,8 @@ export function makeCarrierGeometry(spec: PrimitiveSpec): THREE.BufferGeometry {
   const rMax = Math.max(spec.r, spec.r2 ?? 0);
   // Rough arc length pole-to-pole; densify so blend zones have vertices to bend.
   const arc = 2 * hl + Math.PI * rMax;
-  const profileSegs = Math.max(12, Math.round(arc * 26 * detail));
-  const radialSegs = Math.max(12, Math.round(2 * Math.PI * rMax * 20 * detail));
+  const profileSegs = Math.max(10, Math.round(arc * 20 * detail));
+  const radialSegs = Math.max(10, Math.round(2 * Math.PI * rMax * 15 * detail));
 
   const top = hl + (spec.r2 ?? spec.r);
   const bottom = -hl - spec.r;

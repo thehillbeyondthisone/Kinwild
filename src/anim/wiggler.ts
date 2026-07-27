@@ -3,7 +3,7 @@ import { BlendShellCharacter } from '../core/characterMesh';
 import { PrimitiveSpec } from '../core/primitives';
 import { edgesToLists } from '../core/blendGraph';
 import { dampAngle } from './ik';
-import { getToonGradient } from '../shaders/materials';
+import { CritterEyes } from './eyes';
 
 export interface WigglerDef {
   /** head-first chain of spheres */
@@ -31,7 +31,7 @@ export class Wiggler {
 
   private def: WigglerDef;
   private spine: THREE.Vector3[];
-  private eyes?: THREE.Group;
+  private eyes?: CritterEyes;
   private target = new THREE.Vector3();
   private wavePhase = Math.random() * 10;
   private initialized = false;
@@ -56,18 +56,8 @@ export class Wiggler {
     this.spine = def.segments.map(() => new THREE.Vector3());
 
     if (def.eyes) {
-      this.eyes = new THREE.Group();
-      const white = new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: getToonGradient() });
-      const black = new THREE.MeshBasicMaterial({ color: 0x1a1c2c });
-      for (const side of [-1, 1]) {
-        const eye = new THREE.Mesh(new THREE.SphereGeometry(def.eyes.r, 16, 12), white);
-        eye.position.set(side * def.eyes.spread, def.eyes.y, 0);
-        const pupil = new THREE.Mesh(new THREE.SphereGeometry(def.eyes.r * 0.55, 12, 10), black);
-        pupil.position.z = def.eyes.r * 0.62;
-        eye.add(pupil);
-        this.eyes.add(eye);
-      }
-      this.group.add(this.eyes);
+      this.eyes = new CritterEyes(def.eyes);
+      this.group.add(this.eyes.group);
     }
   }
 
@@ -125,10 +115,7 @@ export class Wiggler {
       prims[i].position.y = def.segments[i].r * 0.92 + Math.sin(time * 3 + i) * 0.004;
       prims[i].quaternion.setFromUnitVectors(_tmp.set(0, 0, 1), _dir);
     }
-    if (this.eyes) {
-      this.eyes.position.copy(prims[0].position);
-      this.eyes.quaternion.copy(prims[0].quaternion);
-    }
+    this.eyes?.track(prims[0].position, prims[0].quaternion, time);
     this.character.sync();
   }
 }

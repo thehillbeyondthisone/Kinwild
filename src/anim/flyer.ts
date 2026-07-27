@@ -4,7 +4,7 @@ import { PrimitiveSpec } from '../core/primitives';
 import { edgesToLists } from '../core/blendGraph';
 import { dampAngle, placeSegment, yawQuat } from './ik';
 import { Rope } from './rope';
-import { getToonGradient } from '../shaders/materials';
+import { CritterEyes } from './eyes';
 
 export interface FlyerDef {
   body: PrimitiveSpec;
@@ -45,7 +45,7 @@ export class Flyer {
   private wing0: number;
   private feet0 = -1;
   private tail?: { rope: Rope; prim0: number; segLen: number };
-  private eyes?: THREE.Group;
+  private eyes?: CritterEyes;
   private vel = new THREE.Vector3();
   private roll = 0;
   private pitch = 0;
@@ -102,18 +102,8 @@ export class Flyer {
     this.group.add(this.character.group);
 
     if (def.eyes) {
-      this.eyes = new THREE.Group();
-      const white = new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: getToonGradient() });
-      const black = new THREE.MeshBasicMaterial({ color: 0x1a1c2c });
-      for (const side of [-1, 1]) {
-        const eye = new THREE.Mesh(new THREE.SphereGeometry(def.eyes.r, 16, 12), white);
-        eye.position.set(side * def.eyes.spread, def.eyes.y, 0);
-        const pupil = new THREE.Mesh(new THREE.SphereGeometry(def.eyes.r * 0.55, 12, 10), black);
-        pupil.position.z = def.eyes.r * 0.62;
-        eye.add(pupil);
-        this.eyes.add(eye);
-      }
-      this.group.add(this.eyes);
+      this.eyes = new CritterEyes(def.eyes);
+      this.group.add(this.eyes.group);
     }
   }
 
@@ -179,10 +169,7 @@ export class Flyer {
     _tmp2.copy(def.headOffset).applyQuaternion(_q).add(_tmp);
     prims[pi].position.copy(_tmp2);
     prims[pi].quaternion.copy(_q);
-    if (this.eyes) {
-      this.eyes.position.copy(_tmp2);
-      this.eyes.quaternion.copy(_q);
-    }
+    this.eyes?.track(_tmp2, _q, time);
     pi++;
     if (def.beak && def.beakOffset) {
       _tmp2.copy(def.beakOffset).applyQuaternion(_q).add(prims[1].position);

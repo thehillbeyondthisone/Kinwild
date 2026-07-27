@@ -56,6 +56,8 @@ export class GaitEngine {
   private groupCount: number;
   /** Accumulated stride phase in cycles, for bob/arm-swing coupling. */
   phase = 0;
+  /** Fired when a foot lands; strength scales with stride length. */
+  onLand?: (foot: THREE.Vector3, strength: number) => void;
 
   constructor(cfg: GaitLegConfig[], opts: GaitOptions = {}) {
     this.cfg = cfg;
@@ -135,6 +137,7 @@ export class GaitEngine {
           leg.swinging = false;
           leg.foot.y = 0;
           leg.landPulse = 1;
+          this.onLand?.(leg.foot, Math.min(stride * 2.5, 1));
         }
       } else {
         this.worldHome(_desired, body, i, this.triggerLead);

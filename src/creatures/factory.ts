@@ -10,10 +10,13 @@ import { Wiggler, WigglerDef } from '../anim/wiggler';
 export interface Critter {
   dna: CritterDNA;
   group: THREE.Group;
+  shell: import('../core/characterMesh').BlendShellCharacter;
   /** ground-projected position the critter is at (for pathing) */
   position(): THREE.Vector3;
   follow(target: THREE.Vector3): void;
   update(dt: number, time: number): void;
+  /** Subscribe to footfalls/landings (walkers and hoppers). */
+  setLandHandler(cb: (pos: THREE.Vector3, strength: number) => void): void;
   dispose(): void;
 }
 
@@ -241,10 +244,15 @@ export function createCritter(raw: CritterDNA): Critter {
   return {
     dna,
     group: impl.group,
+    shell: impl.character,
     position: () =>
       anyImpl.pos ?? anyImpl.body?.pos ?? (impl as Wiggler).character.prims[0].position,
     follow: (t) => impl.follow(t),
     update: (dt, time) => impl.update(dt, time),
+    setLandHandler: (cb) => {
+      if (impl instanceof Walker) impl.gait.onLand = cb;
+      else if (impl instanceof Hopper) impl.onLand = cb;
+    },
     dispose: () => impl.character.dispose(),
   };
 }

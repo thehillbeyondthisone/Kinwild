@@ -5,7 +5,7 @@ import { edgesToLists } from '../core/blendGraph';
 import { BodyFrame, GaitEngine, GaitLegConfig } from './gait';
 import { dampAngle, placeSegment, solveTwoBone, yawQuat } from './ik';
 import { Rope } from './rope';
-import { getToonGradient } from '../shaders/materials';
+import { CritterEyes } from './eyes';
 
 export interface WalkerRopeDef {
   anchor: THREE.Vector3;
@@ -86,7 +86,7 @@ export class Walker {
   private armPrim0 = -1;
   private headPrim = -1;
   private ropes: { rope: Rope; prim0: number; segLen: number }[] = [];
-  private eyes?: THREE.Group;
+  private eyes?: CritterEyes;
   private target = new THREE.Vector3();
   private smoothVel = new THREE.Vector3();
   private lean = new THREE.Vector2(); // pitch, roll
@@ -181,23 +181,10 @@ export class Walker {
       { trigger: Math.max(0.09, (def.legs[0].l1 + def.legs[0].l2) * 0.28) },
     );
 
-    if (def.head?.eyes) this.buildEyes();
-  }
-
-  private buildEyes(): void {
-    const eyeCfg = this.def.head!.eyes!;
-    this.eyes = new THREE.Group();
-    const white = new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: getToonGradient() });
-    const black = new THREE.MeshBasicMaterial({ color: 0x1a1c2c });
-    for (const side of [-1, 1]) {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(eyeCfg.r, 16, 12), white);
-      eye.position.set(side * eyeCfg.spread, eyeCfg.y, 0);
-      const pupil = new THREE.Mesh(new THREE.SphereGeometry(eyeCfg.r * 0.55, 12, 10), black);
-      pupil.position.z = eyeCfg.r * 0.62;
-      eye.add(pupil);
-      this.eyes.add(eye);
+    if (def.head?.eyes) {
+      this.eyes = new CritterEyes(def.head.eyes);
+      this.group.add(this.eyes.group);
     }
-    this.group.add(this.eyes);
   }
 
   /** Set the point the walker steers toward. */
@@ -267,10 +254,7 @@ export class Walker {
       h.position.copy(def.head!.offset).applyQuaternion(this.body.quat).add(this.body.pos);
       h.position.y += Math.sin(this.gait.phase * 2 + 0.9) * 0.012;
       h.quaternion.copy(this.body.quat);
-      if (this.eyes) {
-        this.eyes.position.copy(h.position);
-        this.eyes.quaternion.copy(h.quaternion);
-      }
+      this.eyes?.track(h.position, h.quaternion, time);
     }
 
     def.legs.forEach((leg, i) => {
