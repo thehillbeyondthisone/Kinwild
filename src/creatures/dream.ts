@@ -28,11 +28,22 @@ const SCHEMA_DOC = `
 
 const RULES = `
 Rules:
-- Body space: +z is forward, +y is up, origin sits at the creature's mid-height. Units are meters; a typical body radius is 0.16-0.28.
-- Proportions are relative to the first body radius r: heads read cute at 0.6-0.9r, legs 1.2-2.5r long, ears 0.8-1.5r.
+- Body space: +z is forward (the face), +y is up, origin is the body center. Units are meters and every number is a NUMBER, never a quoted string.
+- Call the first body radius r (use 0.16-0.30). Everything scales off it:
+    head.size      0.7-0.95 x r
+    legs.length    1.3-2.2 x r   (must exceed r, or the body drags on the ground)
+    legs.thickness 0.2-0.35 x r
+    ropes.length   0.8-1.5 x r
+- Head placement, and this is the part that is easy to get wrong:
+    upright two-legged critters -> head.at = [0, 1.3*r, 0]
+    flat:true four/six-legged bodies -> head.at = [0, 0.7*r, 1.6*r]   (forward, only slightly up)
+  The head must sit clear of the torso, not inside it.
+- Ears and antennae go ON TOP OF THE HEAD: their "at" y must be ABOVE head.at y, and their z near the head's z. Never give them a negative y.
+- Tails go behind: "at" z clearly negative, y near 0.
 - "walker" needs legs. "flyer" needs wings. "hopper" and "wiggler" need neither.
 - A wiggler's body should be 5-7 spheres of shrinking size (they form the spine).
 - flat:true lays a capsule body along +z — use it for four-legged animals.
+- Match speed to the creature: heavy/armored 0.5-0.9, ordinary 1.0-1.4, darting 1.5-2.5.
 - Reply with ONE JSON object and nothing else. No markdown fence, no commentary.`.trim();
 
 function example(name: string): string {
@@ -55,14 +66,30 @@ export const DREAM_SYSTEM_PROMPT = [
   example('Thumper'),
 ].join('\n');
 
-/** Pull the first JSON object out of a reply, tolerating fences and chatter. */
+/**
+ * Pull the first JSON object out of a reply, tolerating the things small
+ * local models actually do: markdown fences, chatter either side, and
+ * trailing commas (`[0.1,]`), which JSON.parse rejects outright.
+ */
 export function extractDNA(text: string): CritterDNA {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   const body = fenced ? fenced[1] : text;
   const start = body.indexOf('{');
   const end = body.lastIndexOf('}');
   if (start < 0 || end <= start) throw new Error('no JSON object in reply');
-  return JSON.parse(body.slice(start, end + 1)) as CritterDNA;
+  const raw = body.slice(start, end + 1);
+  try {
+    return JSON.parse(raw) as CritterDNA;
+  } catch {
+    // Strip commas that sit before a closing bracket/brace, ignoring any
+    // that appear inside string values.
+    const repaired = raw.replace(/,(?=\s*[}\]])/g, (m, offset: number) => {
+      const before = raw.slice(0, offset);
+      const quotes = (before.match(/(?<!\\)"/g) ?? []).length;
+      return quotes % 2 === 1 ? m : '';
+    });
+    return JSON.parse(repaired) as CritterDNA;
+  }
 }
 
 export interface DreamOptions {

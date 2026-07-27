@@ -76,10 +76,35 @@ function spawnRandom(seed?: number): Critter {
 function clearSpawned(): void {
   while (roster.length > LIBRARY.length) {
     const c = roster.pop()!;
+    if (c === selected) select(null);
     roam.remove(c);
     scene.remove(c.group);
     c.dispose();
   }
+}
+
+// --- selection: clicking a critter pets it and selects it in the panel ---
+let selected: Critter | null = null;
+
+const selectRing = new THREE.Mesh(
+  new THREE.RingGeometry(0.85, 1, 40),
+  new THREE.MeshBasicMaterial({
+    color: 0xfff0a8,
+    transparent: true,
+    opacity: 0.85,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  }),
+);
+selectRing.rotation.x = -Math.PI / 2;
+selectRing.visible = false;
+selectRing.renderOrder = 2;
+scene.add(selectRing);
+
+function select(critter: Critter | null): void {
+  selected = critter;
+  selectRing.visible = !!critter;
+  ui.setSelected(critter);
 }
 
 const petColor = new THREE.Color(0xff8ec4);
@@ -89,7 +114,9 @@ enablePetting(renderer.domElement, camera, {
     const radius = critter.bounds(point);
     critter.pet(nowT);
     world.puffs.spawn(point, 9, 0.5, nowT, petColor, radius * 0.5);
+    select(critter);
   },
+  onMiss: () => select(null),
 });
 
 const ui = buildUi({
@@ -98,11 +125,16 @@ const ui = buildUi({
   critters: () => roster,
   // Import runs through the normalizing factory, so hand-edited or
   // AI-generated JSON degrades gracefully instead of crashing.
+  // One malformed critter must not sink the rest of a batch.
   importDNA: (list) => {
     let n = 0;
     for (const dna of list) {
-      addCritter(createCritter(dna));
-      n++;
+      try {
+        addCritter(createCritter(dna));
+        n++;
+      } catch (e) {
+        console.warn(`[import] skipped "${dna?.name ?? '?'}"`, e);
+      }
     }
     return n;
   },
@@ -114,8 +146,12 @@ const ui = buildUi({
     scene.remove(old.group);
     old.dispose();
     roster.splice(i, 1);
-    addCritter(createCritter(dna));
+    const next = createCritter(dna);
+    addCritter(next);
+    // The edited critter stays selected, so repeated tweaks keep working.
+    select(next);
   },
+  onSelect: (critter) => select(critter),
 });
 
 // A shared link spawns its critters alongside the library.
@@ -133,7 +169,15 @@ function update(t: number, dt: number): void {
     critter.shell.uniforms.uIters.value = dist < 8 ? 3 : dist < 16 ? 2 : 1;
     critter.shell.outlineMesh.visible = dist < 18;
   }
+
+  if (selected) {
+    const radius = selected.bounds(_ringAt);
+    selectRing.position.set(_ringAt.x, 0.012, _ringAt.z);
+    const pulse = 1 + Math.sin(t * 4) * 0.04;
+    selectRing.scale.setScalar(radius * 0.62 * pulse);
+  }
 }
+const _ringAt = new THREE.Vector3();
 
 const clock = new THREE.Clock();
 let last = 0;

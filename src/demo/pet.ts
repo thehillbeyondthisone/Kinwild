@@ -9,6 +9,8 @@ const _sphere = new THREE.Sphere();
 export interface PetOptions {
   critters: () => Critter[];
   onPet: (critter: Critter, point: THREE.Vector3) => void;
+  /** Clicking empty ground — used to clear the selection. */
+  onMiss?: () => void;
 }
 
 /**
@@ -56,6 +58,8 @@ export function enablePetting(
     if (hit) {
       hit.bounds(_center);
       opts.onPet(hit, _center);
+    } else {
+      opts.onMiss?.();
     }
   });
 }

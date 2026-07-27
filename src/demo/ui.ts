@@ -13,6 +13,14 @@ export interface UiHooks {
   exportDNA: () => CritterDNA[];
   /** Replace one critter in place with edited DNA. */
   replaceCritter: (old: Critter, dna: CritterDNA) => void;
+  /** Called when the panel changes the selection (dropdown pick). */
+  onSelect: (critter: Critter | null) => void;
+}
+
+export interface Ui {
+  setFps: (fps: number, calls: number, tris: number) => void;
+  /** Point the panel at a critter — called when one is clicked in the scene. */
+  setSelected: (critter: Critter | null) => void;
 }
 
 function download(filename: string, text: string): void {
@@ -30,8 +38,9 @@ function parseDNA(text: string): CritterDNA[] {
 }
 
 /** Control panel + FPS meter + DNA import/export. */
-export function buildUi(hooks: UiHooks): { setFps: (fps: number, calls: number, tris: number) => void } {
+export function buildUi(hooks: UiHooks): Ui {
   const gui = new GUI({ title: 'creature creator' });
+  let selected: Critter | null = null;
 
   const fileInput = document.createElement('input');
   fileInput.type = 'file';
@@ -70,8 +79,16 @@ export function buildUi(hooks: UiHooks): { setFps: (fps: number, calls: number, 
     clear: () => hooks.clearSpawned(),
     outline: 1.0,
     export: () => download('critters.json', JSON.stringify(hooks.exportDNA(), null, 2)),
+    exportOne: () => {
+      if (!selected) {
+        setStatus('click a critter first');
+        return;
+      }
+      download(`${selected.dna.name || 'critter'}.json`, JSON.stringify(selected.dna, null, 2));
+      setStatus(`exported ${selected.dna.name}`);
+    },
     import: () => fileInput.click(),
-    status: 'drop a .json to import',
+    status: 'click a critter to select it',
     stats: '—',
   };
   gui.add(params, 'seed', 0, 999999, 1).name('seed (0 = random)');
@@ -86,9 +103,14 @@ export function buildUi(hooks: UiHooks): { setFps: (fps: number, calls: number, 
       }
     });
   const io = gui.addFolder('critter DNA');
-  io.add(params, 'export').name('⬇ export json');
+  io.add(params, 'exportOne').name('⬇ export selected');
+  io.add(params, 'export').name('⬇ export all');
   io.add(params, 'import').name('⬆ import json…');
   const statusCtrl = io.add(params, 'status').name('io').disable();
+  function setStatus(msg: string): void {
+    params.status = msg;
+    statusCtrl.updateDisplay();
+  }
 
   // --- dream a critter (local LM Studio) ---
   const dream = gui.addFolder('🧬 dream a critter');
@@ -120,37 +142,47 @@ export function buildUi(hooks: UiHooks): { setFps: (fps: number, calls: number, 
     statusCtrl.updateDisplay();
   }
 
-  // --- live DNA editor ---
-  const editor = buildEditor(hooks, (msg) => {
-    params.status = msg;
-    statusCtrl.updateDisplay();
-  });
-  const edit = gui.addFolder('edit');
+  // --- selection + live DNA editor ---
+  const editor = buildEditor(hooks, setStatus);
+  const edit = gui.addFolder('selected critter');
   const editParams = {
-    which: '',
+    which: '(none)',
     open: () => {
-      const list = hooks.critters();
-      const target = list.find((c) => c.dna.name === editParams.which) ?? list[0];
-      if (target) editor.open(target);
+      if (!selected) return setStatus('click a critter first');
+      editor.open(selected);
     },
     share: () => {
-      const list = hooks.critters();
-      const target = list.find((c) => c.dna.name === editParams.which) ?? list[0];
-      if (!target) return;
-      navigator.clipboard.writeText(encodeDNA(target.dna)).then(
-        () => { params.status = 'share link copied'; statusCtrl.updateDisplay(); },
-        () => { params.status = 'clipboard blocked'; statusCtrl.updateDisplay(); },
+      if (!selected) return setStatus('click a critter first');
+      navigator.clipboard.writeText(encodeDNA(selected.dna)).then(
+        () => setStatus('share link copied'),
+        () => setStatus('clipboard blocked'),
       );
     },
   };
-  const whichCtrl = edit.add(editParams, 'which', ['']).name('critter');
   edit.add(editParams, 'open').name('✎ edit DNA…');
   edit.add(editParams, 'share').name('🔗 copy share link');
-  // Rebuild the dropdown each time the folder opens — the roster changes.
+
+  // Dropdown lives last in the folder: lil-gui's .options() destroys the
+  // controller and appends a replacement, so anything after it would jump
+  // around every time the roster changes.
+  let whichCtrl = edit.add(editParams, 'which', ['(none)']).name('critter');
+  function refreshDropdown(): void {
+    const list = hooks.critters();
+    // Names repeat (seeded critters share a naming scheme), so options are
+    // keyed by roster index with the name shown alongside.
+    const labels = list.map((c, i) => `${i}: ${c.dna.name}`);
+    const i = selected ? list.indexOf(selected) : -1;
+    editParams.which = i >= 0 ? labels[i] : '(none)';
+    whichCtrl = whichCtrl
+      .options(labels.length ? labels : ['(none)'])
+      .name('critter')
+      .onChange((label: string) => {
+        hooks.onSelect(hooks.critters()[Number(label.split(':')[0])] ?? null);
+      });
+  }
+  refreshDropdown();
   edit.onOpenClose((f) => {
-    if (f._closed) return;
-    const names = hooks.critters().map((c) => c.dna.name);
-    whichCtrl.options(names.length ? names : ['']).name('critter');
+    if (!f._closed) refreshDropdown();
   });
 
   const statsCtrl = gui.add(params, 'stats').name('perf').disable();
@@ -159,6 +191,13 @@ export function buildUi(hooks: UiHooks): { setFps: (fps: number, calls: number, 
     setFps: (fps, calls, tris) => {
       params.stats = `${fps.toFixed(0)} fps · ${calls} calls · ${(tris / 1000).toFixed(0)}k tris`;
       statsCtrl.updateDisplay();
+    },
+    setSelected: (critter) => {
+      selected = critter;
+      refreshDropdown();
+      if (critter) setStatus(`selected ${critter.dna.name}`);
+      // Keep an open editor pointed at whatever is now selected.
+      editor.retargetIfOpen(critter);
     },
   };
 }
@@ -213,6 +252,13 @@ function buildEditor(hooks: UiHooks, status: (msg: string) => void) {
       current = critter;
       area.value = JSON.stringify(critter.dna, null, 2);
       panel.style.display = 'block';
+    },
+    /** Follow the selection while open, but never steal focus mid-edit. */
+    retargetIfOpen(critter: Critter | null) {
+      if (panel.style.display === 'none' || !critter || critter === current) return;
+      if (document.activeElement === area) return;
+      current = critter;
+      area.value = JSON.stringify(critter.dna, null, 2);
     },
   };
 }
