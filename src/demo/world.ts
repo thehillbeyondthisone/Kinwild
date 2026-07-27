@@ -9,6 +9,7 @@ export class Puffs {
   readonly points: THREE.Points;
   private birth: Float32Array;
   private data: Float32Array; // life, size, vx, vz per particle
+  private colors: Float32Array;
   private positions: Float32Array;
   private cursor = 0;
   private uTime = { value: 0 };
@@ -19,10 +20,12 @@ export class Puffs {
     this.positions = new Float32Array(n * 3);
     this.birth = new Float32Array(n).fill(-1e3);
     this.data = new Float32Array(n * 4);
+    this.colors = new Float32Array(n * 3).fill(1);
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
     geo.setAttribute('aBirth', new THREE.BufferAttribute(this.birth, 1));
     geo.setAttribute('aData', new THREE.BufferAttribute(this.data, 4));
+    geo.setAttribute('aColor', new THREE.BufferAttribute(this.colors, 3));
     geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 100);
 
     const mat = new THREE.ShaderMaterial({
@@ -32,9 +35,12 @@ export class Puffs {
       vertexShader: /* glsl */ `
         attribute float aBirth;
         attribute vec4 aData; // life, size, vx, vz
+        attribute vec3 aColor;
         uniform float uTime;
         varying float vFade;
+        varying vec3 vColor;
         void main() {
+          vColor = aColor;
           float age = uTime - aBirth;
           float t = clamp(age / max(aData.x, 1e-3), 0.0, 1.0);
           vFade = (1.0 - t) * step(0.0, age) * step(t, 0.999);
@@ -47,12 +53,13 @@ export class Puffs {
       `,
       fragmentShader: /* glsl */ `
         varying float vFade;
+        varying vec3 vColor;
         void main() {
           vec2 uv = gl_PointCoord * 2.0 - 1.0;
           float d = dot(uv, uv);
           if (d > 1.0) discard;
           float soft = smoothstep(1.0, 0.35, d);
-          gl_FragColor = vec4(0.98, 0.95, 0.88, soft * vFade * 0.5);
+          gl_FragColor = vec4(vColor, soft * vFade * 0.5);
         }
       `,
     });
@@ -60,14 +67,27 @@ export class Puffs {
     this.points.frustumCulled = false;
   }
 
-  spawn(pos: THREE.Vector3, count: number, strength: number, time: number): void {
+  /**
+   * `spread` is the ring radius the burst starts at — pet bursts need it
+   * wide enough to clear the critter's own body, or the puffs spawn inside
+   * it and get depth-occluded.
+   */
+  spawn(
+    pos: THREE.Vector3,
+    count: number,
+    strength: number,
+    time: number,
+    color?: THREE.Color,
+    spread = 0.03,
+  ): void {
     for (let i = 0; i < count; i++) {
       const s = this.cursor;
       this.cursor = (this.cursor + 1) % Puffs.MAX;
-      const a = Math.random() * Math.PI * 2;
-      const r = 0.03 + Math.random() * 0.05;
-      this.positions.set([pos.x + Math.cos(a) * r, 0.03, pos.z + Math.sin(a) * r], s * 3);
+      const a = (i / count) * Math.PI * 2 + Math.random() * 0.4;
+      const r = spread + Math.random() * 0.05;
+      this.positions.set([pos.x + Math.cos(a) * r, pos.y + 0.03, pos.z + Math.sin(a) * r], s * 3);
       this.birth[s] = time;
+      this.colors.set(color ? [color.r, color.g, color.b] : [0.98, 0.95, 0.88], s * 3);
       this.data.set(
         [
           0.4 + Math.random() * 0.3 + strength * 0.25, // life
@@ -81,6 +101,7 @@ export class Puffs {
     (this.points.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
     (this.points.geometry.attributes.aBirth as THREE.BufferAttribute).needsUpdate = true;
     (this.points.geometry.attributes.aData as THREE.BufferAttribute).needsUpdate = true;
+    (this.points.geometry.attributes.aColor as THREE.BufferAttribute).needsUpdate = true;
   }
 
   update(time: number): void {

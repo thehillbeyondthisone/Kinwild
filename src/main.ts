@@ -5,6 +5,8 @@ import { LIBRARY } from './creatures/library';
 import { generateDNA } from './creatures/generate';
 import { buildWorld } from './demo/world';
 import { buildUi } from './demo/ui';
+import { Roam } from './demo/roam';
+import { enablePetting } from './demo/pet';
 import { sunDirUniform } from './shaders/materials';
 
 const app = document.getElementById('app')!;
@@ -51,114 +53,72 @@ const world = buildWorld(scene);
 let nowT = 0;
 
 // --- critters from DNA ---
-interface Roaming {
-  critter: Critter;
-  radius: number;
-  w: number;
-  phase: number;
-  cx: number;
-  cz: number;
-  /** Per-critter gaze point — lookAt() keeps the reference, so it can't be shared. */
-  gaze: THREE.Vector3;
-}
-const roster: Roaming[] = [];
+const roster: Critter[] = [];
+const roam = new Roam({ range: 7 });
 
-function addCritter(critter: Critter, slot: number): void {
+function addCritter(critter: Critter): void {
   scene.add(critter.group);
   critter.setLandHandler((pos, s) => world.puffs.spawn(pos, 1 + Math.round(s * 3), s, nowT));
-  const golden = slot * 2.4;
-  roster.push({
-    critter,
-    radius: 1.6 + (slot % 4) * 0.75,
-    w: (0.3 + (slot % 3) * 0.14) * (slot % 2 ? -1 : 1),
-    phase: golden,
-    cx: Math.sin(golden) * 0.8,
-    cz: Math.cos(golden) * 0.8,
-    gaze: new THREE.Vector3(),
-  });
+  roster.push(critter);
+  roam.add(critter);
 }
 
-LIBRARY.forEach((dna, i) => addCritter(createCritter(dna), i));
+LIBRARY.forEach((dna) => addCritter(createCritter(dna)));
 
 function spawnRandom(seed?: number): Critter {
   const s = seed ?? Math.floor(Math.random() * 1e9);
   const critter = createCritter(generateDNA(s));
-  addCritter(critter, roster.length);
+  addCritter(critter);
   return critter;
 }
 
 function clearSpawned(): void {
   while (roster.length > LIBRARY.length) {
-    const r = roster.pop()!;
-    scene.remove(r.critter.group);
-    r.critter.dispose();
+    const c = roster.pop()!;
+    roam.remove(c);
+    scene.remove(c.group);
+    c.dispose();
   }
 }
+
+const petColor = new THREE.Color(0xff8ec4);
+enablePetting(renderer.domElement, camera, {
+  critters: () => roster,
+  onPet: (critter, point) => {
+    const radius = critter.bounds(point);
+    critter.pet(nowT);
+    world.puffs.spawn(point, 9, 0.5, nowT, petColor, radius * 0.5);
+  },
+});
 
 const ui = buildUi({
   spawnRandom,
   clearSpawned,
-  critters: () => roster.map((r) => r.critter),
+  critters: () => roster,
   // Import runs through the normalizing factory, so hand-edited or
   // AI-generated JSON degrades gracefully instead of crashing.
   importDNA: (list) => {
     let n = 0;
     for (const dna of list) {
-      addCritter(createCritter(dna), roster.length);
+      addCritter(createCritter(dna));
       n++;
     }
     return n;
   },
-  exportDNA: () => roster.map((r) => r.critter.dna),
+  exportDNA: () => roster.map((c) => c.dna),
 });
-
-const _target = new THREE.Vector3();
-const _selfC = new THREE.Vector3();
-const _otherC = new THREE.Vector3();
-
-/**
- * Pick something for each critter to look at: the nearest neighbor within
- * range, with an occasional glance at the camera (staggered per critter so
- * they never all turn at once).
- */
-function updateGaze(t: number): void {
-  for (let i = 0; i < roster.length; i++) {
-    const me = roster[i].critter;
-    me.bounds(_selfC);
-    let found = false;
-    let bestD = 3.2;
-    for (let j = 0; j < roster.length; j++) {
-      if (i === j) continue;
-      const rad = roster[j].critter.bounds(_otherC);
-      const d = _selfC.distanceTo(_otherC);
-      if (d < bestD) {
-        bestD = d;
-        found = true;
-        roster[i].gaze.set(_otherC.x, _otherC.y + rad * 0.12, _otherC.z);
-      }
-    }
-    // Every ~9s each critter takes a 2s look at the viewer (staggered, so
-    // they never all turn in unison).
-    const glance = (t + i * 2.7) % 9;
-    me.lookAt(glance < 2 ? camera.position : found ? roster[i].gaze : null);
-  }
-}
 
 function update(t: number, dt: number): void {
   nowT = t;
   world.update(t);
   sunDirUniform.value.copy(sun.position).normalize();
-  updateGaze(t);
-  for (const r of roster) {
-    const a = t * r.w + r.phase;
-    _target.set(r.cx + Math.sin(a) * r.radius, 0, r.cz + Math.cos(a) * r.radius);
-    r.critter.follow(_target);
-    r.critter.update(dt, t);
+  roam.update(dt, t, camera);
 
+  for (const critter of roster) {
     // Distance LOD: fewer Newton iterations far away, no outline at range.
-    const dist = camera.position.distanceTo(r.critter.position());
-    r.critter.shell.uniforms.uIters.value = dist < 8 ? 3 : dist < 16 ? 2 : 1;
-    r.critter.shell.outlineMesh.visible = dist < 18;
+    const dist = camera.position.distanceTo(critter.position());
+    critter.shell.uniforms.uIters.value = dist < 8 ? 3 : dist < 16 ? 2 : 1;
+    critter.shell.outlineMesh.visible = dist < 18;
   }
 }
 
