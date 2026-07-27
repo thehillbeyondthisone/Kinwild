@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Walker } from './anim/walker';
+import { Hopper } from './anim/hopper';
+import { Flyer } from './anim/flyer';
 
 const app = document.getElementById('app')!;
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -100,6 +102,40 @@ const hex = new Walker({
   bodyHeight: 0.38,
 });
 
+const hopper = new Hopper({
+  body: { type: 'sphere', r: 0.22, color: 0xd9a066, blend: 0.11 },
+  head: { type: 'sphere', r: 0.15, color: 0xe8bb88, blend: 0.07 },
+  headOffset: v3(0, 0.21, 0.14),
+  eyes: { r: 0.038, spread: 0.06, y: 0.02 },
+  ropes: [
+    { anchor: v3(-0.07, 0.32, 0.08), segments: 2, segLen: 0.12, r: 0.05, color: 0xe8bb88, dir: v3(-0.2, 1, -0.15), erect: 13 },
+    { anchor: v3(0.07, 0.32, 0.08), segments: 2, segLen: 0.12, r: 0.05, color: 0xe8bb88, dir: v3(0.2, 1, -0.15), erect: 13 },
+    { anchor: v3(0, -0.02, -0.2), segments: 2, segLen: 0.09, r: 0.055, color: 0xf5e6d0, dir: v3(0, -0.3, -1) },
+  ],
+  feet: [
+    { offset: v3(-0.11, -0.19, 0.06), r: 0.055, hl: 0.08, color: 0xc98d55 },
+    { offset: v3(0.11, -0.19, 0.06), r: 0.055, hl: 0.08, color: 0xc98d55 },
+  ],
+  restHeight: 0.26,
+});
+
+const flyer = new Flyer({
+  body: { type: 'sphere', r: 0.17, color: 0xe25f9c, blend: 0.09 },
+  head: { type: 'sphere', r: 0.12, color: 0xf08ab8, blend: 0.06 },
+  headOffset: v3(0, 0.12, 0.17),
+  beak: { type: 'cone', r: 0.045, r2: 0.008, hl: 0.05, color: 0xf7d154, blend: 0.02 },
+  beakOffset: v3(0, -0.01, 0.13),
+  eyes: { r: 0.032, spread: 0.052, y: 0.025 },
+  wing: { r: 0.05, len: 0.3, color: 0xc74d86, thin: 0.5 },
+  wingAnchor: v3(0.15, 0.06, 0),
+  feet: [
+    { offset: v3(-0.06, -0.13, -0.02), r: 0.028, hl: 0.05, color: 0xf7d154 },
+    { offset: v3(0.06, -0.13, -0.02), r: 0.028, hl: 0.05, color: 0xf7d154 },
+  ],
+  tail: { segments: 2, segLen: 0.1, r: 0.045, color: 0xc74d86, anchor: v3(0, 0.02, -0.16) },
+  altitude: 1.5,
+});
+
 const walkers = [biped, quad, hex];
 const paths = [
   { center: v3(0, 0, 0), radius: 2.2, w: 0.55, phase: 0 },
@@ -111,6 +147,7 @@ quad.speed = 1.2;
 hex.speed = 1.0;
 
 walkers.forEach((w) => scene.add(w.group));
+scene.add(hopper.group, flyer.group);
 
 const _target = new THREE.Vector3();
 function update(t: number, dt: number): void {
@@ -125,6 +162,12 @@ function update(t: number, dt: number): void {
     w.follow(_target);
     w.update(dt);
   });
+  const ha = t * 0.3 + 1.2;
+  hopper.follow(_target.set(Math.sin(ha) * 3.8, 0, Math.cos(ha) * 3.8));
+  hopper.update(dt, t);
+  const fa = t * 0.45 + 3.0;
+  flyer.follow(_target.set(Math.sin(fa) * 3.2, 0, Math.cos(fa) * 3.2));
+  flyer.update(dt, t);
 }
 
 const clock = new THREE.Clock();
@@ -146,6 +189,8 @@ requestAnimationFrame(tick);
   scene,
   camera,
   walkers,
+  hopper,
+  flyer,
   tickOnce: (t?: number, dt = 1 / 60) => {
     update(t ?? clock.getElapsedTime(), dt);
     renderer.render(scene, camera);
