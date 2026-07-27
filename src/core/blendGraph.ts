@@ -11,11 +11,12 @@ import { MAX_INFL } from '../shaders/chunks';
 export function packInfluences(lists: number[][], maxPrims: number): Int32Array {
   const packed = new Int32Array(maxPrims * MAX_INFL).fill(-1);
   lists.forEach((neighbors, prim) => {
-    const infl = [prim, ...neighbors.filter((n) => n !== prim)];
+    let infl = [prim, ...neighbors.filter((n) => n !== prim)];
     if (infl.length > MAX_INFL) {
-      throw new Error(
-        `prim ${prim} has ${infl.length - 1} neighbors; max is ${MAX_INFL - 1}`,
+      console.warn(
+        `blendGraph: prim ${prim} has ${infl.length - 1} neighbors; keeping first ${MAX_INFL - 1}`,
       );
+      infl = infl.slice(0, MAX_INFL);
     }
     infl.forEach((j, i) => (packed[prim * MAX_INFL + i] = j));
   });

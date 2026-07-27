@@ -4,7 +4,18 @@ import { PrimitiveSpec } from '../core/primitives';
 import { edgesToLists } from '../core/blendGraph';
 import { BodyFrame, GaitEngine, GaitLegConfig } from './gait';
 import { dampAngle, placeSegment, solveTwoBone, yawQuat } from './ik';
+import { Rope } from './rope';
 import { getToonGradient } from '../shaders/materials';
+
+export interface WalkerRopeDef {
+  anchor: THREE.Vector3;
+  dir: THREE.Vector3;
+  segments: number;
+  segLen: number;
+  r: number;
+  color: THREE.ColorRepresentation;
+  erect?: number;
+}
 
 export interface WalkerLegDef {
   /** Hip anchor in body space (+z forward). */
@@ -36,6 +47,7 @@ export interface WalkerDef {
   head?: { spec: PrimitiveSpec; offset: THREE.Vector3; eyes?: { r: number; spread: number; y: number } };
   legs: WalkerLegDef[];
   arms?: WalkerArmDef[];
+  ropes?: WalkerRopeDef[];
   /** Rest height of the body-space origin above ground. */
   bodyHeight: number;
   /** Extra blend edges between prim indices (on top of the auto rig edges). */
@@ -73,6 +85,7 @@ export class Walker {
   private legPrim0: number; // index of first leg prim (2 per leg)
   private armPrim0 = -1;
   private headPrim = -1;
+  private ropes: { rope: Rope; prim0: number; segLen: number }[] = [];
   private eyes?: THREE.Group;
   private target = new THREE.Vector3();
   private smoothVel = new THREE.Vector3();
@@ -94,17 +107,34 @@ export class Walker {
       specs.push(def.head.spec);
       edges.push([0, this.headPrim]);
     }
+    // Hosts pick the nearest anchor prim with neighbor budget left, so a
+    // busy hub (hexapod front segment) sheds attachments to its neighbor
+    // instead of overflowing the influence list.
+    const hostLoad = new Map<number, number>();
+    edges.forEach(([a, b]) => {
+      hostLoad.set(a, (hostLoad.get(a) ?? 0) + 1);
+      hostLoad.set(b, (hostLoad.get(b) ?? 0) + 1);
+    });
+    const pickHost = (
+      anchor: THREE.Vector3,
+      candidates: { index: number; offset: THREE.Vector3 }[],
+    ): number => {
+      const sorted = [...candidates].sort(
+        (a, b) => a.offset.distanceTo(anchor) - b.offset.distanceTo(anchor),
+      );
+      const open = sorted.find((c) => (hostLoad.get(c.index) ?? 0) < 6) ?? sorted[0];
+      hostLoad.set(open.index, (hostLoad.get(open.index) ?? 0) + 1);
+      return open.index;
+    };
+    const bodyAnchors = def.body.map((b, i) => ({ index: i, offset: b.offset }));
+    const allAnchors = def.head
+      ? [...bodyAnchors, { index: this.headPrim, offset: def.head.offset }]
+      : bodyAnchors;
+
     this.legPrim0 = specs.length;
     def.legs.forEach((leg) => {
       const upper = specs.length;
-      // Attach the leg to the nearest body prim so hexapod rear legs blend
-      // with the rear segment, keeping influence lists under the cap.
-      let host = 0;
-      let best = Infinity;
-      def.body.forEach((b, bi) => {
-        const d = b.offset.distanceTo(leg.hip);
-        if (d < best) { best = d; host = bi; }
-      });
+      const host = pickHost(leg.hip, bodyAnchors);
       // Limb blends scale with limb thickness — a fixed radius melts small legs.
       specs.push({ type: 'capsule', r: leg.rUpper, hl: leg.l1 / 2, color: leg.color, blend: leg.rUpper * 1.0 });
       specs.push({ type: 'capsule', r: leg.rLower, hl: leg.l2 / 2, color: leg.color, blend: leg.rLower * 0.9 });
@@ -119,6 +149,17 @@ export class Walker {
         edges.push([0, upper], [upper, upper + 1]);
       });
     }
+
+    def.ropes?.forEach((r) => {
+      const prim0 = specs.length;
+      // Ropes may hang off the head too (antennae).
+      const host = pickHost(r.anchor, allAnchors);
+      for (let i = 0; i < r.segments; i++) {
+        specs.push({ type: 'capsule', r: r.r, hl: r.segLen / 2, color: r.color, blend: r.r * 0.85 });
+        edges.push(i === 0 ? [host, prim0] : [prim0 + i - 1, prim0 + i]);
+      }
+      this.ropes.push({ rope: new Rope(r.segments, r.segLen, { erect: r.erect ?? 0 }), prim0, segLen: r.segLen });
+    });
 
     this.character = new BlendShellCharacter(specs, {
       influences: edgesToLists(specs.length, edges),
@@ -173,7 +214,7 @@ export class Walker {
     this.initialized = true;
   }
 
-  update(dt: number): void {
+  update(dt: number, time = 0): void {
     if (!this.initialized) this.teleport(this.target);
     dt = Math.min(dt, 0.05);
     const def = this.def;
@@ -273,6 +314,16 @@ export class Walker {
         placeSegment(prims[this.armPrim0 + i * 2 + 1], _knee, _ankle, arm.l2 / 2);
       });
     }
+
+    this.ropes.forEach((r, i) => {
+      const rd = def.ropes![i];
+      _tmp.copy(rd.anchor).applyQuaternion(this.body.quat).add(this.body.pos);
+      _tmp2.copy(rd.dir).normalize().applyQuaternion(this.body.quat);
+      r.rope.update(dt, _tmp, time, _tmp2);
+      for (let s = 0; s < r.rope.pts.length - 1; s++) {
+        placeSegment(prims[r.prim0 + s], r.rope.pts[s].p, r.rope.pts[s + 1].p, r.segLen / 2);
+      }
+    });
 
     this.character.sync();
   }

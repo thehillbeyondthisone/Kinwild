@@ -1,0 +1,134 @@
+import * as THREE from 'three';
+import { BlendShellCharacter } from '../core/characterMesh';
+import { PrimitiveSpec } from '../core/primitives';
+import { edgesToLists } from '../core/blendGraph';
+import { dampAngle } from './ik';
+import { getToonGradient } from '../shaders/materials';
+
+export interface WigglerDef {
+  /** head-first chain of spheres */
+  segments: { r: number; color: THREE.ColorRepresentation }[];
+  segLen: number;
+  eyes?: { r: number; spread: number; y: number };
+  swayAmp?: number;
+  swayHz?: number;
+}
+
+const _dir = new THREE.Vector3();
+const _perp = new THREE.Vector3();
+const _tmp = new THREE.Vector3();
+
+/**
+ * Legless slitherer: the spine is a follow-the-leader chain; a traveling
+ * sine wave displaces each segment sideways, so the body S-curves while
+ * the whole chain snakes after the head.
+ */
+export class Wiggler {
+  readonly character: BlendShellCharacter;
+  readonly group: THREE.Group;
+  heading = 0;
+  speed = 0.9;
+
+  private def: WigglerDef;
+  private spine: THREE.Vector3[];
+  private eyes?: THREE.Group;
+  private target = new THREE.Vector3();
+  private wavePhase = Math.random() * 10;
+  private initialized = false;
+
+  constructor(def: WigglerDef) {
+    this.def = def;
+    const specs: PrimitiveSpec[] = def.segments.map((s) => ({
+      type: 'sphere',
+      r: s.r,
+      color: s.color,
+      blend: s.r * 0.75,
+    }));
+    const edges: [number, number][] = [];
+    for (let i = 1; i < specs.length; i++) edges.push([i - 1, i]);
+
+    this.character = new BlendShellCharacter(specs, {
+      influences: edgesToLists(specs.length, edges),
+      outlineWidth: 0.018,
+    });
+    this.group = new THREE.Group();
+    this.group.add(this.character.group);
+    this.spine = def.segments.map(() => new THREE.Vector3());
+
+    if (def.eyes) {
+      this.eyes = new THREE.Group();
+      const white = new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: getToonGradient() });
+      const black = new THREE.MeshBasicMaterial({ color: 0x1a1c2c });
+      for (const side of [-1, 1]) {
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(def.eyes.r, 16, 12), white);
+        eye.position.set(side * def.eyes.spread, def.eyes.y, 0);
+        const pupil = new THREE.Mesh(new THREE.SphereGeometry(def.eyes.r * 0.55, 12, 10), black);
+        pupil.position.z = def.eyes.r * 0.62;
+        eye.add(pupil);
+        this.eyes.add(eye);
+      }
+      this.group.add(this.eyes);
+    }
+  }
+
+  follow(target: THREE.Vector3): void {
+    this.target.copy(target);
+  }
+
+  update(dt: number, time: number): void {
+    dt = Math.min(dt, 0.05);
+    const def = this.def;
+    if (!this.initialized) {
+      this.spine.forEach((p, i) => {
+        p.copy(this.target);
+        p.z -= i * def.segLen;
+      });
+      this.initialized = true;
+    }
+
+    // Head steers and advances.
+    const head = this.spine[0];
+    _dir.copy(this.target).sub(head);
+    _dir.y = 0;
+    const dist = _dir.length();
+    if (dist > 1e-3) {
+      this.heading = dampAngle(this.heading, Math.atan2(_dir.x, _dir.z), 3.2, dt);
+    }
+    const speed = Math.min(this.speed, dist * 1.5);
+    head.x += Math.sin(this.heading) * speed * dt;
+    head.z += Math.cos(this.heading) * speed * dt;
+
+    // Followers keep their distance.
+    for (let i = 1; i < this.spine.length; i++) {
+      const prev = this.spine[i - 1];
+      const cur = this.spine[i];
+      _dir.copy(cur).sub(prev);
+      _dir.y = 0;
+      const d = _dir.length() || 1e-5;
+      _dir.multiplyScalar(def.segLen / d);
+      cur.copy(prev).add(_dir);
+    }
+
+    // Render positions: spine + traveling lateral wave, resting on ground.
+    this.wavePhase += dt * (def.swayHz ?? 2.6) * (0.4 + speed);
+    const prims = this.character.prims;
+    const amp = (def.swayAmp ?? 0.5) * Math.min(0.06 + speed * 0.05, 0.11);
+    for (let i = 0; i < this.spine.length; i++) {
+      const p = this.spine[i];
+      const ahead = i === 0 ? this.spine[0] : this.spine[i - 1];
+      _dir.copy(i === 0 ? _tmp.set(Math.sin(this.heading), 0, Math.cos(this.heading)) : _tmp.copy(ahead).sub(p));
+      _dir.y = 0;
+      _dir.normalize();
+      _perp.set(-_dir.z, 0, _dir.x);
+      const sway = Math.sin(this.wavePhase - i * 1.15) * amp * (i === 0 ? 0.5 : 1);
+      prims[i].position.copy(p).addScaledVector(_perp, sway);
+      prims[i].position.y = def.segments[i].r * 0.92 + Math.sin(time * 3 + i) * 0.004;
+      prims[i].quaternion.setFromUnitVectors(_tmp.set(0, 0, 1), _dir);
+    }
+    if (this.eyes) {
+      this.eyes.position.copy(prims[0].position);
+      this.eyes.quaternion.copy(prims[0].quaternion);
+    }
+    this.character.sync();
+  }
+}
