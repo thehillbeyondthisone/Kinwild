@@ -20,17 +20,24 @@ export interface ShellUniforms {
  * projected position. `colored` multiplies the chained SDF albedo into
  * diffuse.
  */
+/** Sun direction (world, normalized) shared by every toon material — drives
+ * the warm-light/cool-shadow tint. Updated once per frame by the demo. */
+export const sunDirUniform: THREE.IUniform<THREE.Vector3> = {
+  value: new THREE.Vector3(0.5, 0.8, 0.4),
+};
+
 function injectShell(
   material: THREE.Material,
   uniforms: Record<string, THREE.IUniform>,
-  opts: { colored?: boolean; discardBuried?: boolean; cacheKey: string },
+  opts: { colored?: boolean; discardBuried?: boolean; defines?: string[]; cacheKey: string },
 ): void {
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
+    const defs = (opts.defines ?? []).map((d) => `#define ${d}`).join('\n');
     // The shell runs once at the top of main() into globals; the stock
     // chunks (which may sit inside #ifdef blocks per material) become
     // trivial assignments from those globals.
-    shader.vertexShader = (shellPars + '\n' + shader.vertexShader)
+    shader.vertexShader = (defs + '\n' + shellPars + '\n' + shader.vertexShader)
       .replace('void main() {', 'void main() {\n' + shellCompute)
       .replace('#include <beginnormal_vertex>', 'vec3 objectNormal = sNrm;')
       .replace('#include <begin_vertex>', 'vec3 transformed = sPos;');
@@ -50,7 +57,19 @@ function injectShell(
     float rim = pow(1.0 - clamp(dot(normalize(vViewPosition), normalize(vNormal)), 0.0, 1.0), 3.0);
     totalEmissiveRadiance += vShellColor * rim * 0.22 + vec3(0.04, 0.05, 0.08) * rim;
   }`,
+          )
+          // Warm-light / cool-shadow: pull the shade side toward violet
+          // instead of gray. Applied to outgoing light just before output.
+          .replace(
+            '#include <opaque_fragment>',
+            `{
+    float sNdl = dot(normalize(vNormal), normalize(uSunDir));
+    outgoingLight *= mix(vec3(0.76, 0.75, 0.96), vec3(1.0), smoothstep(0.02, 0.38, sNdl));
+  }
+  #include <opaque_fragment>`,
           );
+      shader.fragmentShader = 'uniform vec3 uSunDir;\n' + shader.fragmentShader;
+      shader.uniforms.uSunDir = sunDirUniform;
     }
     if (opts.discardBuried) {
       shader.fragmentShader =
@@ -100,15 +119,17 @@ export function makeShellMaterials(
   injectShell(
     outline,
     { ...uniforms, uSurfOffset: outlineWidth, uBurialCut: { value: 0.01 } },
-    { discardBuried: true, cacheKey: 'shell-outline' },
+    { discardBuried: true, defines: ['SHELL_NO_NORMAL', 'SHELL_NO_COLOR'], cacheKey: 'shell-outline' },
   );
 
-  // Shadow passes must see the same deformed silhouette as the beauty pass.
+  // Shadow passes must see the same deformed silhouette as the beauty pass —
+  // but they run the cheap variant (1 Newton step, no normal/color chains).
+  const fastDefs = ['SHELL_FAST', 'SHELL_NO_NORMAL', 'SHELL_NO_COLOR'];
   const depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
-  injectShell(depth, { ...uniforms, uSurfOffset: surfZero }, { cacheKey: 'shell-depth' });
+  injectShell(depth, { ...uniforms, uSurfOffset: surfZero }, { defines: fastDefs, cacheKey: 'shell-depth' });
 
   const distance = new THREE.MeshDistanceMaterial();
-  injectShell(distance, { ...uniforms, uSurfOffset: surfZero }, { cacheKey: 'shell-distance' });
+  injectShell(distance, { ...uniforms, uSurfOffset: surfZero }, { defines: fastDefs, cacheKey: 'shell-distance' });
 
   return { main, outline, depth, distance, outlineWidth };
 }

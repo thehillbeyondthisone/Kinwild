@@ -75,6 +75,11 @@ export class BlendShellCharacter {
       uTuck: { value: new THREE.Vector3(0.02, 0.005, 0.035) },
       uGradEps: { value: opts.gradEps ?? 0.008 },
       uOutlineComp: { value: new THREE.Vector3(4, 0.6, 2.5) },
+      // pattern: rgb + kind in w (0 = none); params: scale, amount
+      uPattern: { value: new THREE.Vector4(0, 0, 0, 0) },
+      uPatternParams: { value: new THREE.Vector4(3, 0.5, 0, 0) },
+      // Newton iterations — demo lowers this with camera distance (LOD)
+      uIters: { value: 3 },
     };
 
     const geometry = mergeCarriers(specs.map(makeCarrierGeometry));

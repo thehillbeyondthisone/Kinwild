@@ -19,6 +19,12 @@ export interface Critter {
   update(dt: number, time: number): void;
   /** Subscribe to footfalls/landings (walkers and hoppers). */
   setLandHandler(cb: (pos: THREE.Vector3, strength: number) => void): void;
+  /** Aim the head/eyes at a world point (null = face forward). Wigglers ignore. */
+  lookAt(target: THREE.Vector3 | null): void;
+  /** Approximate world-space center + radius, for picking. */
+  bounds(out: THREE.Vector3): number;
+  /** React to being petted. */
+  pet(time: number): void;
   dispose(): void;
 }
 
@@ -248,6 +254,9 @@ function buildWiggler(dna: CritterDNA): Wiggler {
   return w;
 }
 
+const PATTERN_KIND = { spots: 1, stripes: 2, gradient: 3 } as const;
+const _hsl = { h: 0, s: 0, l: 0 };
+
 export function createCritter(raw: CritterDNA): Critter {
   const { dna, notes } = normalizeDNA(raw);
   if (notes.length) console.info(`[critter:${dna.name}]`, notes.join('; '));
@@ -259,6 +268,29 @@ export function createCritter(raw: CritterDNA): Critter {
     case 'flyer': impl = buildFlyer(dna); break;
     case 'wiggler': impl = buildWiggler(dna); break;
   }
+
+  // Per-critter style: pattern uniforms + outline as a darkened hue-shift of
+  // the base color (reads far better than flat navy in a crowd).
+  if (dna.pattern) {
+    const pc = new THREE.Color(paletteColor(dna, dna.pattern.color, 2));
+    (impl.character.uniforms.uPattern.value as THREE.Vector4).set(
+      pc.r, pc.g, pc.b, PATTERN_KIND[dna.pattern.kind],
+    );
+    (impl.character.uniforms.uPatternParams.value as THREE.Vector4).set(
+      dna.pattern.scale ?? 3, dna.pattern.amount ?? 0.5, 0, 0,
+    );
+  }
+  // Ink line = a very dark, slightly hue-shifted version of the base color.
+  // Both HSL calls must name the same space: getHSL defaults to linear and
+  // setHSL to sRGB, and that mismatch silently brightens the result.
+  const base = new THREE.Color(dna.palette[0]);
+  base.getHSL(_hsl, THREE.SRGBColorSpace);
+  impl.character.materials.outline.color.setHSL(
+    (_hsl.h + 0.03) % 1,
+    Math.min(_hsl.s * 0.9, 1),
+    Math.min(_hsl.l * 0.18, 0.13),
+    THREE.SRGBColorSpace,
+  );
   const anyImpl = impl as { pos?: THREE.Vector3; body?: { pos: THREE.Vector3 } };
   return {
     dna,
@@ -273,6 +305,18 @@ export function createCritter(raw: CritterDNA): Critter {
       if (impl instanceof Walker) impl.gait.onLand = cb;
       else if (impl instanceof Hopper) impl.onLand = cb;
     },
+    lookAt: (target) => {
+      if (!(impl instanceof Wiggler)) impl.look.target = target;
+    },
+    bounds: (out) => {
+      const p = anyImpl.pos ?? anyImpl.body?.pos ?? impl.character.prims[0].position;
+      out.copy(p);
+      const r0 = dna.body[0].size[0];
+      // Rig origins sit at hip/center height; nudge up to cover the head.
+      out.y += r0 * 0.6;
+      return r0 * 2.6;
+    },
+    pet: (time) => impl.pet?.(time),
     dispose: () => impl.character.dispose(),
   };
 }

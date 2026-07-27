@@ -66,11 +66,22 @@ export interface RopeDNA {
   floppy?: boolean;
 }
 
+export interface PatternDNA {
+  kind: 'spots' | 'stripes' | 'gradient';
+  /** palette index of the pattern color */
+  color?: number;
+  /** feature density, ~1 (big) to ~8 (fine) */
+  scale?: number;
+  /** coverage/strength 0..1 */
+  amount?: number;
+}
+
 export interface CritterDNA {
   name: string;
   mode: CritterMode;
   /** hex color strings, e.g. "#f2994a"; 2-4 entries. */
   palette: string[];
+  pattern?: PatternDNA;
   body: BodySegDNA[];
   head?: HeadDNA;
   legs?: LegsDNA;
@@ -150,6 +161,13 @@ export function normalizeDNA(dna: CritterDNA): { dna: CritterDNA; notes: string[
     r.length = clamp(r.length, 0.06, 0.6);
     r.thickness = clamp(r.thickness, 0.02, 0.12);
     r.at = r.at?.map((v) => clamp(v, -0.9, 0.9)) as [number, number, number] ?? [0, 0, -0.2];
+  }
+  if (out.pattern) {
+    if (!['spots', 'stripes', 'gradient'].includes(out.pattern.kind)) {
+      out.pattern.kind = fix(`unknown pattern "${out.pattern.kind}" → spots`, 'spots');
+    }
+    out.pattern.scale = clamp(out.pattern.scale ?? 3, 1, 8);
+    out.pattern.amount = clamp(out.pattern.amount ?? 0.5, 0.08, 0.9);
   }
   out.speed = clamp(out.speed ?? 1.1, 0.2, 3);
   out.altitude = clamp(out.altitude ?? 1.4, 0.6, 3);

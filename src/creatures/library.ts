@@ -29,6 +29,7 @@ export const LIBRARY: CritterDNA[] = [
     name: 'Bumble',
     mode: 'walker',
     palette: ['#6cb7f5', '#a5d8ff', '#3f7fc4', '#f2e2c9'],
+    pattern: { kind: 'gradient', color: 2, scale: 3, amount: 0.45 },
     body: [
       { shape: 'capsule', size: [0.22, 0.2], flat: true },
       { shape: 'capsule', size: [0.16, 0.14], at: [0, -0.09, 0.02], flat: true, color: 3 },
@@ -46,6 +47,7 @@ export const LIBRARY: CritterDNA[] = [
     name: 'Skitter',
     mode: 'walker',
     palette: ['#8fd463', '#c1ef9e', '#4f9e3f', '#f5ffe0'],
+    pattern: { kind: 'spots', color: 2, scale: 3.5, amount: 0.5 },
     body: [
       { shape: 'sphere', size: [0.19], at: [0, 0.02, 0.14] },
       { shape: 'sphere', size: [0.26], at: [0, 0.06, -0.24], color: 2 },
@@ -75,6 +77,7 @@ export const LIBRARY: CritterDNA[] = [
     name: 'Flit',
     mode: 'flyer',
     palette: ['#ef6ea8', '#f9a8cc', '#c94f86', '#ffd166'],
+    pattern: { kind: 'stripes', color: 2, scale: 5, amount: 0.5 },
     body: [{ shape: 'sphere', size: [0.16] }],
     head: { size: 0.14, at: [0, 0.13, 0.16], color: 1, eyes: 0.04, beak: [0.05, 0.11], beakColor: 3 },
     wings: { length: 0.32, thickness: 0.05, color: 2 },

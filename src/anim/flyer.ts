@@ -5,6 +5,7 @@ import { edgesToLists } from '../core/blendGraph';
 import { dampAngle, placeSegment, yawQuat } from './ik';
 import { Rope } from './rope';
 import { CritterEyes, EyesConfig } from './eyes';
+import { LookAt } from './look';
 
 export interface FlyerDef {
   body: PrimitiveSpec;
@@ -46,6 +47,7 @@ export class Flyer {
   private feet0 = -1;
   private tail?: { rope: Rope; prim0: number; segLen: number };
   private eyes?: CritterEyes;
+  readonly look = new LookAt();
   private vel = new THREE.Vector3();
   private roll = 0;
   private pitch = 0;
@@ -111,6 +113,13 @@ export class Flyer {
     this.target.copy(target);
   }
 
+  /** Startled flutter: a pop upward and a burst of flapping. */
+  pet(time: number): void {
+    this.vel.y += 1.6;
+    this.flapPhase += 1.2;
+    this.eyes?.happy(time);
+  }
+
   update(dt: number, time: number): void {
     dt = Math.min(dt, 0.05);
     const def = this.def;
@@ -168,8 +177,9 @@ export class Flyer {
     let pi = 1;
     _tmp2.copy(def.headOffset).applyQuaternion(_q).add(_tmp);
     prims[pi].position.copy(_tmp2);
-    prims[pi].quaternion.copy(_q);
-    this.eyes?.track(_tmp2, _q, time);
+    this.look.update(dt, _tmp2, this.heading, _q, prims[pi].quaternion);
+    this.eyes?.track(_tmp2, prims[pi].quaternion, time);
+    if (this.look.target) this.eyes?.lookAt(this.look.target);
     pi++;
     if (def.beak && def.beakOffset) {
       _tmp2.copy(def.beakOffset).applyQuaternion(_q).add(prims[1].position);

@@ -5,6 +5,7 @@ import { LIBRARY } from './creatures/library';
 import { generateDNA } from './creatures/generate';
 import { buildWorld } from './demo/world';
 import { buildUi } from './demo/ui';
+import { sunDirUniform } from './shaders/materials';
 
 const app = document.getElementById('app')!;
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -57,6 +58,8 @@ interface Roaming {
   phase: number;
   cx: number;
   cz: number;
+  /** Per-critter gaze point — lookAt() keeps the reference, so it can't be shared. */
+  gaze: THREE.Vector3;
 }
 const roster: Roaming[] = [];
 
@@ -71,6 +74,7 @@ function addCritter(critter: Critter, slot: number): void {
     phase: golden,
     cx: Math.sin(golden) * 0.8,
     cz: Math.cos(golden) * 0.8,
+    gaze: new THREE.Vector3(),
   });
 }
 
@@ -109,14 +113,52 @@ const ui = buildUi({
 });
 
 const _target = new THREE.Vector3();
+const _selfC = new THREE.Vector3();
+const _otherC = new THREE.Vector3();
+
+/**
+ * Pick something for each critter to look at: the nearest neighbor within
+ * range, with an occasional glance at the camera (staggered per critter so
+ * they never all turn at once).
+ */
+function updateGaze(t: number): void {
+  for (let i = 0; i < roster.length; i++) {
+    const me = roster[i].critter;
+    me.bounds(_selfC);
+    let found = false;
+    let bestD = 3.2;
+    for (let j = 0; j < roster.length; j++) {
+      if (i === j) continue;
+      const rad = roster[j].critter.bounds(_otherC);
+      const d = _selfC.distanceTo(_otherC);
+      if (d < bestD) {
+        bestD = d;
+        found = true;
+        roster[i].gaze.set(_otherC.x, _otherC.y + rad * 0.12, _otherC.z);
+      }
+    }
+    // Every ~9s each critter takes a 2s look at the viewer (staggered, so
+    // they never all turn in unison).
+    const glance = (t + i * 2.7) % 9;
+    me.lookAt(glance < 2 ? camera.position : found ? roster[i].gaze : null);
+  }
+}
+
 function update(t: number, dt: number): void {
   nowT = t;
   world.update(t);
+  sunDirUniform.value.copy(sun.position).normalize();
+  updateGaze(t);
   for (const r of roster) {
     const a = t * r.w + r.phase;
     _target.set(r.cx + Math.sin(a) * r.radius, 0, r.cz + Math.cos(a) * r.radius);
     r.critter.follow(_target);
     r.critter.update(dt, t);
+
+    // Distance LOD: fewer Newton iterations far away, no outline at range.
+    const dist = camera.position.distanceTo(r.critter.position());
+    r.critter.shell.uniforms.uIters.value = dist < 8 ? 3 : dist < 16 ? 2 : 1;
+    r.critter.shell.outlineMesh.visible = dist < 18;
   }
 }
 

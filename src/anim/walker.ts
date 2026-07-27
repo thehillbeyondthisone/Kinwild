@@ -6,6 +6,7 @@ import { BodyFrame, GaitEngine, GaitLegConfig } from './gait';
 import { dampAngle, placeSegment, solveTwoBone, yawQuat } from './ik';
 import { Rope } from './rope';
 import { CritterEyes, EyesConfig } from './eyes';
+import { LookAt } from './look';
 
 export interface WalkerRopeDef {
   anchor: THREE.Vector3;
@@ -94,10 +95,13 @@ export class Walker {
   private snoutPrim = -1;
   private ropes: { rope: Rope; prim0: number; segLen: number }[] = [];
   private eyes?: CritterEyes;
+  readonly look = new LookAt();
   private target = new THREE.Vector3();
   private smoothVel = new THREE.Vector3();
   private lean = new THREE.Vector2(); // pitch, roll
   private bobY = 0;
+  private petBounce = 0;
+  private petVel = 0;
   private initialized = false;
 
   constructor(def: WalkerDef) {
@@ -204,6 +208,12 @@ export class Walker {
     this.target.copy(target);
   }
 
+  /** Delighted little hop when petted. */
+  pet(time: number): void {
+    this.petVel = 2.0;
+    this.eyes?.happy(time);
+  }
+
   teleport(pos: THREE.Vector3, heading = 0): void {
     this.body.pos.copy(pos);
     this.body.pos.y = this.def.bodyHeight;
@@ -241,7 +251,11 @@ export class Walker {
       Math.sin(this.gait.phase * 2) * 0.018 * Math.min(speedNow / this.speed, 1) -
       this.gait.swingCount() * 0.006;
     this.bobY += (bobTarget - this.bobY) * (1 - Math.exp(-10 * dt));
-    this.body.pos.y = def.bodyHeight + this.bobY;
+    // Pet bounce: a damped spring back to rest height.
+    this.petVel -= this.petBounce * 90 * dt;
+    this.petVel *= Math.exp(-5 * dt);
+    this.petBounce = Math.max(0, this.petBounce + this.petVel * dt);
+    this.body.pos.y = def.bodyHeight + this.bobY + this.petBounce;
 
     const pitchT = THREE.MathUtils.clamp(speedNow * 0.06, 0, 0.12);
     const rollT = Math.sin(this.gait.phase) * 0.03 * Math.min(speedNow / this.speed, 1);
@@ -265,7 +279,7 @@ export class Walker {
       const h = prims[this.headPrim];
       h.position.copy(def.head!.offset).applyQuaternion(this.body.quat).add(this.body.pos);
       h.position.y += Math.sin(this.gait.phase * 2 + 0.9) * 0.012;
-      h.quaternion.copy(this.body.quat);
+      this.look.update(dt, h.position, this.heading, this.body.quat, h.quaternion);
       if (this.snoutPrim >= 0) {
         const s = prims[this.snoutPrim];
         s.position.copy(def.head!.snout!.offset).applyQuaternion(h.quaternion).add(h.position);
@@ -275,6 +289,7 @@ export class Walker {
         );
       }
       this.eyes?.track(h.position, h.quaternion, time);
+      if (this.look.target) this.eyes?.lookAt(this.look.target);
     }
 
     def.legs.forEach((leg, i) => {

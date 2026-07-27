@@ -49,6 +49,14 @@ export function generateDNA(seed: number): CritterDNA {
     body: [],
     speed: range(0.8, 1.6),
   };
+  if (r() < 0.5) {
+    dna.pattern = {
+      kind: pick(['spots', 'stripes', 'gradient'] as const),
+      color: pick([2, 3]),
+      scale: range(2, 6),
+      amount: range(0.25, 0.65),
+    };
+  }
 
   if (mode === 'walker') {
     const count = pick([2, 4, 6] as const);

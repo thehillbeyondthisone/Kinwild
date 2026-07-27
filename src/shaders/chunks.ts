@@ -29,6 +29,12 @@ uniform ivec4 uPrimInfl[${MAX_PRIMS * 2}];
 
 // x: tuck depth under the skin, y: burial depth where tuck starts, z: where it saturates
 uniform vec3 uTuck;
+// rgb: pattern color, w: kind (0 none, 1 spots, 2 stripes, 3 gradient)
+uniform vec4 uPattern;
+// x: scale, y: amount/coverage
+uniform vec4 uPatternParams;
+// Newton iteration count (distance LOD); SHELL_FAST ignores it
+uniform int uIters;
 uniform float uGradEps;
 // isosurface target offset: 0 for skin, +outlineWidth for the outline hull
 uniform float uSurfOffset;
@@ -121,6 +127,55 @@ float othersDist(vec3 p, ivec4 A, ivec4 B) {
   return d;
 }
 
+float hash31(vec3 p) {
+  p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
+  p *= 17.0;
+  return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+
+float vnoise(vec3 p) {
+  vec3 i = floor(p);
+  vec3 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(mix(hash31(i), hash31(i + vec3(1, 0, 0)), f.x),
+        mix(hash31(i + vec3(0, 1, 0)), hash31(i + vec3(1, 1, 0)), f.x), f.y),
+    mix(mix(hash31(i + vec3(0, 0, 1)), hash31(i + vec3(1, 0, 1)), f.x),
+        mix(hash31(i + vec3(0, 1, 1)), hash31(i + vec3(1, 1, 1)), f.x), f.y),
+    f.z);
+}
+
+// Pattern mask sampled in carrier REST space (sticks to the body under
+// animation). Coordinates are per-prim, so the mask fades out near blend
+// seams (seamFade) — a spot can never straddle two prims and tear.
+//
+// Spots/stripes use raw rest units so a feature is the same physical size
+// on the head as on the body; gradient uses height normalized by the prim's
+// own extent so it reads as one sweep regardless of part size.
+float patternMask(vec3 restPos, float extent, float primId, float seamFade) {
+  int kind = int(uPattern.w + 0.5);
+  if (kind == 0) return 0.0;
+  float f = uPatternParams.x * 8.0;
+  float amount = uPatternParams.y;
+  vec3 off = vec3(hash31(vec3(primId + 1.0)), hash31(vec3(primId + 7.0)), hash31(vec3(primId + 13.0))) * 9.0;
+  float m = 0.0;
+  if (kind == 1) {
+    // Crisp edge: toon spots want a hard cut, not a soft blotch.
+    float n = vnoise(restPos * f + off);
+    float t = 0.74 - amount * 0.34;
+    m = smoothstep(t, t + 0.035, n);
+  } else if (kind == 2) {
+    float s = sin(restPos.y * f * 1.6 + vnoise(restPos * f * 0.5 + off) * 1.5) * 0.5 + 0.5;
+    float t = 0.62 - amount * 0.42;
+    m = smoothstep(t, t + 0.06, s);
+  } else {
+    float ny = restPos.y / max(extent, 1e-3);
+    float t = 1.0 - amount * 2.0;
+    m = smoothstep(t, t + 0.5, ny) * 0.9;
+  }
+  return m * seamFade;
+}
+
 vec3 sPos; vec3 sNrm; vec3 sCol; float sBurial;
 
 void blendShell(vec3 rawPos, out vec3 oPos, out vec3 oNrm, out vec3 oCol) {
@@ -144,21 +199,40 @@ void blendShell(vec3 rawPos, out vec3 oPos, out vec3 oNrm, out vec3 oCol) {
   // FRAGMENTS — any vertex-position scheme would drag triangles through
   // the visible skin somewhere, but discarded webbing simply vanishes and
   // the hull stays covered by the other primitive's exposed carriers.
-  float burial = max(0.0, -othersDist(p, A, B));
+  float dOther = othersDist(p, A, B);
+  float burial = max(0.0, -dOther);
   sBurial = burial;
   float tuckAmt = smoothstep(uTuck.y, uTuck.z, burial);
   float target = uSurfOffset > 0.0 ? surf : mix(0.0, -uTuck.x, tuckAmt);
 
-  for (int i = 0; i < 3; i++) {
+#ifdef SHELL_FAST
+  // Shadow passes tolerate ~1cm silhouette error; one step is plenty.
+  const int iters = 1;
+#else
+  int iters = uIters;
+#endif
+  for (int i = 0; i < iters; i++) {
     float f = fieldFast(p, A, B, kS) - target;
     vec3 n = fieldGrad(p, A, B, kS);
     p -= n * f;
   }
 
   oPos = p;
+#ifdef SHELL_NO_NORMAL
+  oNrm = vec3(0.0, 1.0, 0.0);
+#else
   oNrm = fieldGrad(p, A, B, kS);
+#endif
+#ifdef SHELL_NO_COLOR
+  oCol = vec3(1.0);
+#else
   oCol = vec3(0.0);
   fieldColor(p, A, B, kS, oCol);
+  vec4 pr = uPrimParams[base];
+  float extent = int(pr.w + 0.5) == 0 ? pr.x : pr.x + pr.y;
+  float seamFade = smoothstep(0.015, 0.07, dOther);
+  oCol = mix(oCol, uPattern.rgb, patternMask(rawPos, extent, aPrim, seamFade));
+#endif
 }
 `;
 

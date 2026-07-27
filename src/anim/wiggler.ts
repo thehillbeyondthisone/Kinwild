@@ -65,6 +65,12 @@ export class Wiggler {
     this.target.copy(target);
   }
 
+  /** Excited squirm. */
+  pet(time: number): void {
+    this.wavePhase += 2.0;
+    this.eyes?.happy(time);
+  }
+
   update(dt: number, time: number): void {
     dt = Math.min(dt, 0.05);
     const def = this.def;

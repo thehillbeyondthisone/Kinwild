@@ -5,6 +5,7 @@ import { edgesToLists } from '../core/blendGraph';
 import { dampAngle, placeSegment, yawQuat } from './ik';
 import { Rope } from './rope';
 import { CritterEyes, EyesConfig } from './eyes';
+import { LookAt } from './look';
 
 export interface HopperDef {
   body: PrimitiveSpec;
@@ -53,6 +54,7 @@ export class Hopper {
   private ropes: { rope: Rope; prim0: number; segLen: number; r: number }[] = [];
   private feet0 = -1;
   private eyes?: CritterEyes;
+  readonly look = new LookAt();
   private state: HopState = 'idle';
   private stateT = 0;
   private pause = 0.4;
@@ -105,6 +107,15 @@ export class Hopper {
 
   follow(target: THREE.Vector3): void {
     this.target.copy(target);
+  }
+
+  /** Petting makes it hop right now, no matter where it was in the cycle. */
+  pet(time: number): void {
+    if (this.state !== 'air') {
+      this.setState('crouch');
+      this.stateT = 0.12;
+    }
+    this.eyes?.happy(time);
   }
 
   update(dt: number, time: number): void {
@@ -215,10 +226,11 @@ export class Hopper {
     prims[0].scale.set(sxz, sy, sxz);
 
     prims[1].position.copy(squashPoint(_tmp, def.headOffset));
-    prims[1].quaternion.copy(q);
+    this.look.update(dt, prims[1].position, this.heading, q, prims[1].quaternion);
     prims[1].scale.set(sxz, sy, sxz);
     if (this.eyes) {
-      this.eyes.track(prims[1].position, q, time);
+      this.eyes.track(prims[1].position, prims[1].quaternion, time);
+      if (this.look.target) this.eyes.lookAt(this.look.target);
       // Counter most of the body squash so eyes stay round-ish.
       const es = 1 / Math.max(sy, 0.6);
       this.eyes.group.scale.set(1, Math.min(es, 1.15), 1);
