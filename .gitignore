@@ -2,3 +2,8 @@ node_modules/
 dist/
 .shots/
 *.local
+
+# Nested independent repo (kinwild) with its own history and remote.
+# Not a submodule: committing it here would add a gitlink pointing at commits
+# no clone could fetch.
+small-world-integration/
