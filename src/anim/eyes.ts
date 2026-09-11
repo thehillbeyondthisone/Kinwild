@@ -82,4 +82,10 @@ export class CritterEyes {
     const sy = 1 - Math.max(blink * 0.85, squint);
     for (const eye of this.lids) eye.scale.y = sy;
   }
+
+  /** Release the per-critter sphere geometries (materials are shared). */
+  dispose(): void {
+    for (const eye of this.lids) eye.geometry.dispose();
+    for (const pupil of this.pupils) pupil.geometry.dispose();
+  }
 }

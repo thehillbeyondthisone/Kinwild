@@ -71,6 +71,12 @@ export class Wiggler {
     this.eyes?.happy(time);
   }
 
+  /** Release GPU resources for the shell and the separate eye meshes. */
+  dispose(): void {
+    this.character.dispose();
+    this.eyes?.dispose();
+  }
+
   update(dt: number, time: number): void {
     dt = Math.min(dt, 0.05);
     const def = this.def;

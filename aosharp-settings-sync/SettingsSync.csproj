@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <AssemblyName>SettingsSync</AssemblyName>
+    <RootNamespace>SettingsSync</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <Platforms>x86</Platforms>
+    <PlatformTarget>x86</PlatformTarget>
+
+    <!-- Point this at your local AOSharp2 install so the assemblies below resolve. -->
+    <AOSharpDir Condition="'$(AOSharpDir)' == ''">C:\AOSharp2</AOSharpDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Adjust these paths/names to match your AOSharp2 distribution if they differ. -->
+    <Reference Include="AOSharp.Core">
+      <HintPath>$(AOSharpDir)\Plugins\AOSharp.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="AOSharp.Common">
+      <HintPath>$(AOSharpDir)\Plugins\AOSharp.Common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Ship the plugin next to its own folder inside the AOSharp Plugins directory. -->
+    <None Include="README.md" />
+  </ItemGroup>
+
+</Project>

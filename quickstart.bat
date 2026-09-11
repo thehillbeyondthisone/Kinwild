@@ -1,13 +1,19 @@
 @echo off
 REM ---------------------------------------------------------------------------
-REM  quickstart.bat - start both dev servers in this workspace.
+REM  quickstart.bat - start the Kinwild dev server (THE project in this
+REM  workspace):
 REM
-REM    Kinwild (small-world-integration)  http://localhost:2001
-REM    Creature Creator (this repo)       http://localhost:5173
+REM    Kinwild (small-world-integration)  http://localhost:2001   <-- main app
+REM
+REM  Creature Creator (this repo, http://localhost:5173) is a SEPARATE,
+REM  archived experiment. It is NOT started by default - launch it only by
+REM  passing "creature" explicitly, so the two projects are never confused:
+REM      quickstart.bat            (Kinwild only - the default)
+REM      quickstart.bat kinwild    (Kinwild only)
+REM      quickstart.bat creature   (Creature Creator :5173 only)
+REM      quickstart.bat all        (both, if you really mean it)
 REM
 REM  Each server opens in its own window; close that window to stop it.
-REM  Pass "kinwild" or "creature" to start only one:
-REM      quickstart.bat kinwild
 REM ---------------------------------------------------------------------------
 setlocal
 
@@ -17,7 +23,7 @@ REM closing quote, so keep a stripped copy for the start commands.
 set "ROOTDIR=%ROOT:~0,-1%"
 set "KINWILD=%ROOT%small-world-integration"
 set "WHICH=%~1"
-if "%WHICH%"=="" set "WHICH=all"
+if "%WHICH%"=="" set "WHICH=kinwild"
 
 echo.
 echo   Kinwild workspace quickstart

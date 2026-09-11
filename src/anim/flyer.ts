@@ -120,6 +120,12 @@ export class Flyer {
     this.eyes?.happy(time);
   }
 
+  /** Release GPU resources for the shell and the separate eye meshes. */
+  dispose(): void {
+    this.character.dispose();
+    this.eyes?.dispose();
+  }
+
   update(dt: number, time: number): void {
     dt = Math.min(dt, 0.05);
     const def = this.def;
@@ -182,9 +188,11 @@ export class Flyer {
     if (this.look.target) this.eyes?.lookAt(this.look.target);
     pi++;
     if (def.beak && def.beakOffset) {
-      _tmp2.copy(def.beakOffset).applyQuaternion(_q).add(prims[1].position);
+      // Ride the head quaternion, not the body's — the beak must stay on the
+      // muzzle while the head cranes toward a look target.
+      _tmp2.copy(def.beakOffset).applyQuaternion(prims[1].quaternion).add(prims[1].position);
       prims[pi].position.copy(_tmp2);
-      prims[pi].quaternion.copy(_q).multiply(
+      prims[pi].quaternion.copy(prims[1].quaternion).multiply(
         new THREE.Quaternion().setFromEuler(_e.set(Math.PI / 2, 0, 0)),
       );
       pi++;

@@ -1,0 +1,17 @@
+{
+  "lastAgent": "agent-local-ed4da0f7-734f-4bb6-972a-1bceab3b7184",
+  "sessionsByServer": {
+    "localhost:8283": {
+      "agentId": "agent-a34a6eb8-cd42-4fe4-a838-88fc80edfba1",
+      "conversationId": "default"
+    },
+    "local:C:\\Users\\fillt\\.letta\\lc-local-backend": {
+      "agentId": "agent-local-ed4da0f7-734f-4bb6-972a-1bceab3b7184",
+      "conversationId": "default"
+    }
+  },
+  "lastSession": {
+    "agentId": "agent-local-ed4da0f7-734f-4bb6-972a-1bceab3b7184",
+    "conversationId": "default"
+  }
+}

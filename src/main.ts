@@ -155,7 +155,15 @@ const ui = buildUi({
 });
 
 // A shared link spawns its critters alongside the library.
-decodeDNAFromHash().forEach((dna) => addCritter(createCritter(dna)));
+// A stale or hand-edited link must not take the whole app down with it: this
+// runs at module top level, above the render loop.
+decodeDNAFromHash().forEach((dna) => {
+  try {
+    addCritter(createCritter(dna));
+  } catch (e) {
+    console.warn(`[share] skipped "${dna?.name ?? '?'}"`, e);
+  }
+});
 
 function update(t: number, dt: number): void {
   nowT = t;

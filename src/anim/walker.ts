@@ -214,6 +214,12 @@ export class Walker {
     this.eyes?.happy(time);
   }
 
+  /** Release GPU resources for the shell and the separate eye meshes. */
+  dispose(): void {
+    this.character.dispose();
+    this.eyes?.dispose();
+  }
+
   teleport(pos: THREE.Vector3, heading = 0): void {
     this.body.pos.copy(pos);
     this.body.pos.y = this.def.bodyHeight;

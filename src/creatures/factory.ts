@@ -317,6 +317,6 @@ export function createCritter(raw: CritterDNA): Critter {
       return r0 * 2.6;
     },
     pet: (time) => impl.pet?.(time),
-    dispose: () => impl.character.dispose(),
+    dispose: () => impl.dispose(),
   };
 }
