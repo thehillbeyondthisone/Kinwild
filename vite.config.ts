@@ -29,10 +29,10 @@ function shotPlugin(): Plugin {
 }
 
 export default defineConfig({
-  // GitHub Pages serves this repo at https://<user>.github.io/kinwild/,
-  // so assets must resolve under /kinwild/ in production. Local dev
-  // (`vite`/`vite preview`) still runs at /.
-  base: process.env.GITHUB_ACTIONS ? '/kinwild/' : '/',
+  // GitHub Pages serves this repo at https://<user>.github.io/Kinwild/
+  // (repo name is capitalized), so assets must resolve under /Kinwild/
+  // in production. Local dev (`vite`/`vite preview`) still runs at /.
+  base: process.env.GITHUB_ACTIONS ? '/Kinwild/' : '/',
   plugins: [shotPlugin()],
   server: {
     port: 5173,
