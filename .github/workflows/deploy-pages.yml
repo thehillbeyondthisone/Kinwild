@@ -28,9 +28,18 @@ jobs:
       - run: npm ci
       - run: npm run build
 
+      # App builds to dist/ (base path is /Kinwild/legacy/, see
+      # vite.config.ts). Assemble the final Pages artifact with the
+      # version-picker landing page at the site root and the app under
+      # /legacy/.
+      - run: |
+          mkdir -p site
+          cp -r dist site/legacy
+          cp landing/index.html site/index.html
+
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: site
 
   deploy:
     needs: build

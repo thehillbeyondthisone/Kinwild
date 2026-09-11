@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Kinwild — choose a version</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #1a1c2c;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #f4f0e6;
+  }
+  body {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 2rem; box-sizing: border-box;
+  }
+  h1 {
+    font-size: clamp(2rem, 6vw, 3.2rem);
+    margin: 0 0 0.5rem;
+    letter-spacing: 0.02em;
+  }
+  p.sub {
+    color: #a9a4c9;
+    margin: 0 0 3rem;
+    font-size: 1.05rem;
+  }
+  .cards {
+    display: flex; gap: 1.5rem; flex-wrap: wrap; justify-content: center;
+    max-width: 900px;
+  }
+  a.card {
+    display: block;
+    width: 320px;
+    text-decoration: none;
+    color: inherit;
+    background: #24273a;
+    border: 1px solid #3a3d5c;
+    border-radius: 14px;
+    padding: 1.75rem;
+    transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  }
+  a.card:hover {
+    transform: translateY(-4px);
+    border-color: #7d8cff;
+    background: #2b2f48;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    margin-bottom: 0.9rem;
+  }
+  .badge.new { background: #2e7d5b; color: #d9ffe9; }
+  .badge.legacy { background: #5c4a2e; color: #ffe9c2; }
+  a.card h2 { margin: 0 0 0.5rem; font-size: 1.3rem; }
+  a.card p { margin: 0; color: #bcb8d8; font-size: 0.92rem; line-height: 1.4; }
+  footer {
+    margin-top: 3rem;
+    font-size: 0.8rem;
+    color: #6b6890;
+  }
+  footer a { color: #9aa3ff; }
+</style>
+</head>
+<body>
+  <h1>🌿 Kinwild</h1>
+  <p class="sub">Two versions live here — pick one.</p>
+
+  <div class="cards">
+    <a class="card" href="https://thehillbeyondthisone.github.io/kinwild-world/">
+      <span class="badge new">Current</span>
+      <h2>Kinwild — Living World</h2>
+      <p>The active build: deterministic living-world prototype with
+      generated flora, seamless primitive fauna, and full procedural
+      presentation.</p>
+    </a>
+
+    <a class="card" href="./legacy/">
+      <span class="badge legacy">Archived</span>
+      <h2>Creature Creator</h2>
+      <p>The earlier prototype this grew out of — SDF blend-shell critters,
+      procedural animation, DNA-driven creature generation.</p>
+    </a>
+  </div>
+
+  <footer>
+    <a href="https://github.com/thehillbeyondthisone/Kinwild">Kinwild on GitHub</a>
+    ·
+    <a href="https://github.com/thehillbeyondthisone/kinwild-world">kinwild-world on GitHub</a>
+  </footer>
+</body>
+</html>
