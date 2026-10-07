@@ -1,3 +1,5 @@
+**[Live Demo →](https://thehillbeyondthisone.github.io/Kinwild/legacy/)**
+
 # Creature Creator
 
 Procedurally animated toon critters built from primitive shapes that render
